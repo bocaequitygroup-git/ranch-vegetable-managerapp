@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f4f6f8; color: #333; }
+    .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 640px; margin: 0 auto 16px; }
+    .hidden { display: none !important; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    input, select, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    button { background: #2e7d32; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
+    button:hover { background: #1b5e20; }
+    button.btn-danger { background: #c62828; }
+    button.btn-secondary { background: #666; }
+    button.btn-warn { background: #ef6c00; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
+    .badge-active { background: #2e7d32; }
+    .badge-danger { background: #c62828; }
+    .badge-paused { background: #ef6c00; }
+    .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
+    #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
+      background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
+    #app-header.hidden { display: none !important; }
+    .conn-status { display: flex; align-items: center; gap: 6px; }
+    .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #888; flex-shrink: 0; }
+    .conn-dot.online { background: #66bb6a; }
+    .conn-dot.checking { background: #ffb300; }
+    .conn-dot.offline { background: #e53935; }
+    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
+    #btn-logout:hover { background: #37474f; }
+    #btn-refresh { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
+
+    .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+    .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .session-row .sr-bed { font-weight: bold; font-size: 15px; }
+    .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
+    .session-row .sr-exception { font-size: 12px; color: #c62828; font-weight: bold; margin-bottom: 8px; }
+    .session-row .sr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; min-width: 90px; }
+
+    .panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; }
+    .panel h4 { margin: 0 0 8px; font-size: 13px; color: #444; }
+    .panel .form-group { margin-bottom: 10px; }
+    .panel select, .panel input { font-size: 14px; padding: 8px; }
+    .panel button { font-size: 13px; padding: 8px; }
+  </style>
+</head>
+<body>
+
+  <div id="app-header" class="hidden">
+    <div class="conn-status">
+      <span id="conn-dot" class="conn-dot"></span>
+      <span id="conn-text">Not connected</span>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button id="btn-refresh" onclick="loadBoard()">Refresh</button>
+      <button id="btn-logout" onclick="appLogout()">Log Out</button>
+    </div>
+  </div>
+
+  <!-- VIEW 1: MANAGER LOGIN -->
+  <div id="view-login" class="card">
+    <h2>Manager Login</h2>
+    <div class="form-group">
+      <label for="login-worker-id">User ID</label>
+      <input type="text" id="login-worker-id" placeholder="e.g. USR-001" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="form-group">
+      <label for="login-pin">PIN</label>
+      <input type="password" id="login-pin" placeholder="****">
+    </div>
+    <button onclick="appLogin()">Sign In</button>
+  </div>
+
+  <!-- VIEW 2: BOARD -->
+  <div id="view-board" class="card hidden">
+    <h2>Open Field Sessions</h2>
+    <div id="board-list"></div>
+  </div>
+
+<script>
+  // This MUST be the WorkerApp project's deployed exec URL (same value as
+  // WEB_APP_URL in WorkerApp.html) -- NOT this ManagerApp project's own exec
+  // URL. This page is hosted by its own separate Apps Script project/
+  // deployment, but every fetch() action below (login, get-manager-board,
+  // reassign-session, etc.) still needs to hit the WorkerApp project's
+  // backend, since that's the project with doPost/routeAction_/the data layer.
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
+
+  const VIEW_IDS = ['view-login', 'view-board'];
+
+  let state = {
+    managerId: '',
+    managerName: '',
+    role: '',
+    sessions: [],
+    workers: []
+  };
+
+  function setConnStatus(status, label) {
+    var dot = document.getElementById('conn-dot');
+    var text = document.getElementById('conn-text');
+    if (!dot || !text) return;
+    dot.className = 'conn-dot ' + status;
+    text.textContent = label;
+  }
+
+  function apiCall(action, payload, callback) {
+    setConnStatus('checking', 'Connecting...');
+    fetch(WEB_APP_URL, {
+      method: 'POST',
+      mode: 'cors',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: action, payload: payload })
+    })
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function(res) {
+        setConnStatus('online', 'Connected');
+        callback(res);
+      })
+      .catch(function(error) {
+        console.error('apiCall failed:', action, error);
+        setConnStatus('offline', 'Connection error');
+        alert('Something went wrong (' + action + '): ' + error.message);
+      });
+  }
+
+  function switchView(viewId) {
+    VIEW_IDS.forEach(v => {
+      var el = document.getElementById(v);
+      if (el) el.classList.add('hidden');
+    });
+    var target = document.getElementById(viewId);
+    if (target) target.classList.remove('hidden');
+  }
+
+  function appLogin() {
+    let workerId = document.getElementById('login-worker-id').value;
+    let pin = document.getElementById('login-pin').value;
+
+    apiCall('login', { workerId: workerId, pin: pin }, function(res) {
+      if (!res || !res.success) {
+        alert('Authentication failed: ' + (res && res.error || 'Invalid credentials'));
+        return;
+      }
+      if (res.user.role !== 'Manager' && res.user.role !== 'Founder') {
+        // Valid login, wrong app -- log them back out immediately so
+        // LOGIN_LOG's login/logout pairing stays intact, and don't proceed.
+        apiCall('logout', { workerId: res.user.workerId }, function() {});
+        alert('This app is for Managers/Founders only.');
+        return;
+      }
+
+      state.managerId = res.user.workerId;
+      state.managerName = res.user.name;
+      state.role = res.user.role;
+
+      document.getElementById('app-header').classList.remove('hidden');
+      loadWorkers();
+      loadBoard();
+    });
+  }
+
+  function appLogout() {
+    var loggedOutId = state.managerId;
+    if (loggedOutId) {
+      apiCall('logout', { workerId: loggedOutId }, function() {});
+    }
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [] };
+    document.getElementById('login-worker-id').value = '';
+    document.getElementById('login-pin').value = '';
+    document.getElementById('app-header').classList.add('hidden');
+    switchView('view-login');
+  }
+
+  function loadWorkers() {
+    apiCall('list-workers', {}, function(res) {
+      state.workers = (res && res.success && res.workers) ? res.workers : [];
+    });
+  }
+
+  function loadBoard() {
+    apiCall('get-manager-board', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load board');
+        return;
+      }
+      state.sessions = res.sessions;
+      renderBoard();
+      switchView('view-board');
+    });
+  }
+
+  function workerOptionsHtml(excludeWorkerId) {
+    return state.workers
+      .filter(function(w) { return w.workerId !== excludeWorkerId; })
+      .map(function(w) { return '<option value="' + w.workerId + '">' + w.name + ' (' + w.workerId + ')</option>'; })
+      .join('');
+  }
+
+  function renderBoard() {
+    let container = document.getElementById('board-list');
+    container.innerHTML = '';
+
+    if (state.sessions.length === 0) {
+      container.innerHTML = '<div class="empty-state">No open sessions right now.</div>';
+      return;
+    }
+
+    state.sessions.forEach(function(s) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+
+      let badgeClass = s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active';
+      let exceptionHtml = s.exceptionFlag
+        ? '<div class="sr-exception">&#9888; Exception: ' + (s.exceptionType || 'Flagged') + '</div>'
+        : '';
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + s.bedId + '</span>' +
+          '<span class="' + badgeClass + '">' + s.status + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + s.activityLabel + ' &middot; ' + s.workerName + ' &middot; ' + s.elapsedMinutes + ' min active</div>' +
+        exceptionHtml +
+        '<div class="sr-actions">' +
+          (s.status === 'PAUSED' ? '<button class="sr-btn-resume">Resume</button>' : '') +
+          '<button class="sr-btn-complete btn-secondary">Complete</button>' +
+          '<button class="sr-btn-reassign btn-warn">Reassign</button>' +
+          '<button class="sr-btn-close-new btn-danger">Close &amp; New</button>' +
+        '</div>' +
+        '<div class="sr-panel-slot"></div>';
+
+      let resumeBtn = row.querySelector('.sr-btn-resume');
+      if (resumeBtn) resumeBtn.onclick = function() { managerResume(s); };
+      row.querySelector('.sr-btn-complete').onclick = function() { managerComplete(s); };
+      row.querySelector('.sr-btn-reassign').onclick = function() { togglePanel(row, s, 'reassign'); };
+      row.querySelector('.sr-btn-close-new').onclick = function() { togglePanel(row, s, 'close-new'); };
+
+      container.appendChild(row);
+    });
+  }
+
+  function managerResume(s) {
+    apiCall('resume-session', { sessionId: s.sessionId }, function(res) {
+      if (res && res.success) loadBoard();
+    });
+  }
+
+  function managerComplete(s) {
+    let quantity = 0;
+    if (s.activity === 'Harvest') {
+      quantity = prompt('Enter harvested quantity (lbs/crates) for ' + s.bedId + ':', '0');
+      if (quantity === null) return;
+    }
+    apiCall('complete-session', { sessionId: s.sessionId, quantity: quantity }, function(res) {
+      if (res && res.success) loadBoard();
+    });
+  }
+
+  // Toggles an inline action panel (Reassign or Close & New) beneath a row.
+  function togglePanel(row, s, kind) {
+    let slot = row.querySelector('.sr-panel-slot');
+    let existing = slot.querySelector('.panel');
+    if (existing) { slot.innerHTML = ''; return; }
+
+    if (kind === 'reassign') {
+      slot.innerHTML =
+        '<div class="panel">' +
+          '<h4>Reassign ' + s.bedId + ' (' + s.activityLabel + ') from ' + s.workerName + '</h4>' +
+          '<div class="form-group"><label>New Worker</label><select class="panel-worker">' + workerOptionsHtml(s.workerId) + '</select></div>' +
+          '<div class="form-group"><label>Reason (optional)</label><input type="text" class="panel-reason" placeholder="Why is this being reassigned?"></div>' +
+          '<button class="panel-confirm btn-warn">Confirm Reassign</button>' +
+        '</div>';
+      slot.querySelector('.panel-confirm').onclick = function() {
+        let toWorkerId = slot.querySelector('.panel-worker').value;
+        let reason = slot.querySelector('.panel-reason').value;
+        if (!toWorkerId) return alert('No worker selected.');
+        apiCall('reassign-session', { sessionId: s.sessionId, toWorkerId: toWorkerId, managerId: state.managerId, reason: reason }, function(res) {
+          if (res && res.success) { loadBoard(); }
+          else alert(res && res.error ? res.error : 'Reassign failed');
+        });
+      };
+    } else {
+      let qtyField = s.activity === 'Harvest'
+        ? '<div class="form-group"><label>Logged Quantity (closing old session)</label><input type="text" class="panel-qty" placeholder="0"></div>'
+        : '';
+      slot.innerHTML =
+        '<div class="panel">' +
+          '<h4>Close ' + s.bedId + ' (' + s.activityLabel + ') &amp; start fresh for a new worker</h4>' +
+          qtyField +
+          '<div class="form-group"><label>New Worker</label><select class="panel-worker">' + workerOptionsHtml(s.workerId) + '</select></div>' +
+          '<div class="form-group"><label>Reason (optional)</label><input type="text" class="panel-reason" placeholder="Why close and reassign instead of resuming?"></div>' +
+          '<button class="panel-confirm btn-danger">Confirm Close &amp; New</button>' +
+        '</div>';
+      slot.querySelector('.panel-confirm').onclick = function() {
+        let toWorkerId = slot.querySelector('.panel-worker').value;
+        let reason = slot.querySelector('.panel-reason').value;
+        let qtyEl = slot.querySelector('.panel-qty');
+        let quantity = qtyEl ? qtyEl.value : 0;
+        if (!toWorkerId) return alert('No worker selected.');
+        apiCall('close-and-create-session', { sessionId: s.sessionId, toWorkerId: toWorkerId, managerId: state.managerId, reason: reason, quantity: quantity }, function(res) {
+          if (res && res.success) { loadBoard(); }
+          else alert(res && res.error ? res.error : 'Close & New failed');
+        });
+      };
+    }
+  }
+</script>
+</body>
+</html>
