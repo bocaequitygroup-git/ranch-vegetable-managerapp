@@ -79,8 +79,21 @@
 
   <!-- VIEW 2: BOARD -->
   <div id="view-board" class="card hidden">
-    <h2>Open Field Sessions</h2>
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Open Field Sessions</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">History</button>
+    </div>
     <div id="board-list"></div>
+  </div>
+
+  <!-- VIEW 3: REASSIGNMENT HISTORY -->
+  <div id="view-history" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Reassignment History</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Refresh</button>
+    </div>
+    <div id="history-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
 <script>
@@ -92,14 +105,15 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history'];
 
   let state = {
     managerId: '',
     managerName: '',
     role: '',
     sessions: [],
-    workers: []
+    workers: [],
+    history: []
   };
 
   function setConnStatus(status, label) {
@@ -197,6 +211,49 @@
       state.sessions = res.sessions;
       renderBoard();
       switchView('view-board');
+    });
+  }
+
+  // Reassignment history feed (both in-place Reassign and Close & New both
+  // land here, since both write through REASSIGNMENT_LOG on the backend).
+  function loadHistory() {
+    apiCall('get-reassignment-log', { managerId: state.managerId, limit: 50 }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load history');
+        return;
+      }
+      state.history = res.entries;
+      renderHistory();
+      switchView('view-history');
+    });
+  }
+
+  function renderHistory() {
+    let container = document.getElementById('history-list');
+    container.innerHTML = '';
+
+    if (state.history.length === 0) {
+      container.innerHTML = '<div class="empty-state">No reassignments logged yet.</div>';
+      return;
+    }
+
+    state.history.forEach(function(h) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+      let isCloseNew = h.actionType === 'CLOSE_AND_NEW';
+      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + h.bedId + '</span>' +
+          '<span class="badge ' + (isCloseNew ? 'badge-danger' : 'badge-paused') + '">' + (isCloseNew ? 'CLOSE & NEW' : 'REASSIGN') + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + h.activityLabel + '</div>' +
+        '<div class="sr-meta"><strong>' + h.fromWorkerName + '</strong> &rarr; <strong>' + h.toWorkerName + '</strong></div>' +
+        (h.reason ? '<div class="sr-meta">Reason: ' + h.reason + '</div>' : '') +
+        '<div class="sr-meta">By ' + h.reassignedByName + ' &middot; ' + when + '</div>';
+
+      container.appendChild(row);
     });
   }
 
