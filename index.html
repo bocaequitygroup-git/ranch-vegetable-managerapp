@@ -19,6 +19,9 @@
     .badge-active { background: #2e7d32; }
     .badge-danger { background: #c62828; }
     .badge-paused { background: #ef6c00; }
+    .badge-pausetype-break { background: #78909c; }
+    .badge-pausetype-lunch { background: #6d4c41; }
+    .badge-pausetype-eod { background: #37474f; }
     .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
@@ -197,6 +200,18 @@
     });
   }
 
+  var PAUSE_TYPE_LABELS = { BREAK: 'Break', LUNCH: 'Lunch', END_OF_DAY: 'End of Day' };
+  function pauseTypeLabel(pauseType) {
+    return PAUSE_TYPE_LABELS[pauseType] || pauseType;
+  }
+  function pauseTypeBadgeClass(pauseType) {
+    // Distinct color per type so a manager can scan the board at a glance:
+    // BREAK/LUNCH read as "coming back", END_OF_DAY reads as "done".
+    if (pauseType === 'END_OF_DAY') return 'badge badge-pausetype-eod';
+    if (pauseType === 'LUNCH') return 'badge badge-pausetype-lunch';
+    return 'badge badge-pausetype-break';
+  }
+
   function workerOptionsHtml(excludeWorkerId) {
     return state.workers
       .filter(function(w) { return w.workerId !== excludeWorkerId; })
@@ -221,11 +236,14 @@
       let exceptionHtml = s.exceptionFlag
         ? '<div class="sr-exception">&#9888; Exception: ' + (s.exceptionType || 'Flagged') + '</div>'
         : '';
+      let pauseTypeHtml = (s.status === 'PAUSED' && s.pauseType)
+        ? '<span class="' + pauseTypeBadgeClass(s.pauseType) + '">' + pauseTypeLabel(s.pauseType) + '</span>'
+        : '';
 
       row.innerHTML =
         '<div class="session-row-top">' +
           '<span class="sr-bed">' + s.bedId + '</span>' +
-          '<span class="' + badgeClass + '">' + s.status + '</span>' +
+          '<span style="display:flex; gap:6px; align-items:center;"><span class="' + badgeClass + '">' + s.status + '</span>' + pauseTypeHtml + '</span>' +
         '</div>' +
         '<div class="sr-meta">' + s.activityLabel + ' &middot; ' + s.workerName + ' &middot; ' + s.elapsedMinutes + ' min active</div>' +
         exceptionHtml +
