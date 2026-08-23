@@ -40,6 +40,7 @@
     .session-row .sr-bed { font-weight: bold; font-size: 15px; }
     .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
     .session-row .sr-exception { font-size: 12px; color: #c62828; font-weight: bold; margin-bottom: 8px; }
+    .session-row .sr-reassigned { font-size: 12px; color: #ef6c00; font-weight: bold; margin-bottom: 8px; }
     .session-row .sr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; min-width: 90px; }
 
@@ -296,6 +297,9 @@
       let pauseTypeHtml = (s.status === 'PAUSED' && s.pauseType)
         ? '<span class="' + pauseTypeBadgeClass(s.pauseType) + '">' + pauseTypeLabel(s.pauseType) + '</span>'
         : '';
+      let reassignedHtml = s.reassigned
+        ? '<div class="sr-reassigned">&#8635; Reassigned from ' + s.reassignedFromName + (s.reassignedByName ? ' by ' + s.reassignedByName : '') + '</div>'
+        : '';
 
       row.innerHTML =
         '<div class="session-row-top">' +
@@ -303,6 +307,7 @@
           '<span style="display:flex; gap:6px; align-items:center;"><span class="' + badgeClass + '">' + s.status + '</span>' + pauseTypeHtml + '</span>' +
         '</div>' +
         '<div class="sr-meta">' + s.activityLabel + ' &middot; ' + s.workerName + ' &middot; ' + s.elapsedMinutes + ' min active</div>' +
+        reassignedHtml +
         exceptionHtml +
         '<div class="sr-actions">' +
           (s.status === 'PAUSED' ? '<button class="sr-btn-resume">Resume</button>' : '') +
