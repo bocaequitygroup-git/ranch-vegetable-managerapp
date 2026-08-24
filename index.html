@@ -34,6 +34,7 @@
     #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
     #btn-logout:hover { background: #37474f; }
     #btn-refresh { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
+    .header-user { font-weight: bold; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
 
     .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
     .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -58,6 +59,7 @@
       <span id="conn-dot" class="conn-dot"></span>
       <span id="conn-text">Not connected</span>
     </div>
+    <span id="header-user-name" class="header-user"></span>
     <div style="display:flex; gap:8px;">
       <button id="btn-refresh" onclick="loadBoard()">Refresh</button>
       <button id="btn-logout" onclick="appLogout()">Log Out</button>
@@ -89,6 +91,7 @@
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Reassignments</button>
       </div>
     </div>
+    <div id="board-subtitle" style="font-size:13px; color:#666; margin-bottom:10px;"></div>
     <div id="board-list"></div>
   </div>
 
@@ -218,6 +221,7 @@
       state.role = res.user.role;
 
       document.getElementById('app-header').classList.remove('hidden');
+      document.getElementById('header-user-name').textContent = res.user.name + ' (' + res.user.role + ')';
       loadWorkers();
       loadBoard();
     });
@@ -232,6 +236,7 @@
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
+    document.getElementById('header-user-name').textContent = '';
     switchView('view-login');
   }
 
@@ -500,6 +505,9 @@
   }
 
   function renderBoard() {
+    let subtitle = document.getElementById('board-subtitle');
+    if (subtitle) subtitle.textContent = state.managerName ? ('Logged in as ' + state.managerName + ' (' + state.role + ')') : '';
+
     let container = document.getElementById('board-list');
     container.innerHTML = '';
 
