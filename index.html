@@ -82,7 +82,12 @@
   <div id="view-board" class="card hidden">
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <h2 style="margin:0;">Open Field Sessions</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">History</button>
+      <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px;">
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">History</button>
+      </div>
     </div>
     <div id="board-list"></div>
   </div>
@@ -97,6 +102,26 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
+  <!-- VIEW 4: HARVEST READY VERIFICATION -->
+  <div id="view-harvest-ready" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Harvest Ready</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Refresh</button>
+    </div>
+    <div id="harvest-ready-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
+  <!-- VIEW 5: HARVEST COMPLETE CLOSE-OUT -->
+  <div id="view-harvest-complete" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Harvest Complete</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Refresh</button>
+    </div>
+    <div id="harvest-complete-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
 <script>
   // This MUST be the WorkerApp project's deployed exec URL (same value as
   // WEB_APP_URL in WorkerApp.html) -- NOT this ManagerApp project's own exec
@@ -106,7 +131,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete'];
 
   let state = {
     managerId: '',
@@ -114,7 +139,9 @@
     role: '',
     sessions: [],
     workers: [],
-    history: []
+    history: [],
+    harvestCandidates: [],
+    harvestableCohorts: []
   };
 
   function setConnStatus(status, label) {
@@ -255,6 +282,134 @@
         '<div class="sr-meta">By ' + h.reassignedByName + ' &middot; ' + when + '</div>';
 
       container.appendChild(row);
+    });
+  }
+
+  // Cohorts currently in Growing state, awaiting manager sign-off before
+  // FIELD_STATE_SEQUENCE can advance them to Harvestable.
+  function loadHarvestCandidates() {
+    apiCall('get-harvest-candidates', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load harvest candidates');
+        return;
+      }
+      state.harvestCandidates = res.candidates;
+      renderHarvestCandidates();
+      switchView('view-harvest-ready');
+    });
+  }
+
+  function renderHarvestCandidates() {
+    let container = document.getElementById('harvest-ready-list');
+    container.innerHTML = '';
+
+    if (state.harvestCandidates.length === 0) {
+      container.innerHTML = '<div class="empty-state">No cohorts currently in Growing state.</div>';
+      return;
+    }
+
+    state.harvestCandidates.forEach(function(c) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+
+      // Irrigation lock status is informational only (see
+      // handleGetHarvestCandidates_ in Code.gs) -- there's no lockout
+      // start-date tracked yet, so this can't confirm a cure period like
+      // the 14-day onion rule has actually elapsed, only whether the zone
+      // valve is locked closed right now. The manager still needs to check
+      // that against SOP themselves before verifying.
+      let lockNote = c.irrigationLockClosed === null ? ''
+        : (c.irrigationLockClosed
+          ? '<div class="sr-meta">Irrigation zone ' + c.irrigationZoneId + ' is currently locked closed &mdash; confirm cure/lockout duration meets SOP before verifying.</div>'
+          : '<div class="sr-meta">Irrigation zone ' + c.irrigationZoneId + ' is not locked closed.</div>');
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + c.cohortId + '</span>' +
+          '<span class="badge">' + c.blockId + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + c.cropName + (c.variety ? ' (' + c.variety + ')' : '') + ' &middot; Beds ' + c.bedRange + '</div>' +
+        (c.targetQtyLbs !== null ? '<div class="sr-meta">Target: ' + c.targetQtyLbs + ' lbs' + (c.targetHarvestDate ? ' by ' + c.targetHarvestDate : '') + '</div>' : '') +
+        lockNote +
+        '<div class="sr-actions"><button class="hr-btn-verify">Verify Harvest Ready</button></div>';
+
+      row.querySelector('.hr-btn-verify').onclick = function() { verifyHarvestReady(c.cohortId); };
+      container.appendChild(row);
+    });
+  }
+
+  function verifyHarvestReady(cohortId) {
+    if (!confirm('Verify ' + cohortId + ' as harvest-ready? This moves it to Harvestable.')) return;
+    apiCall('verify-harvest-ready', { cohortId: cohortId, managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to verify harvest-ready');
+        return;
+      }
+      loadHarvestCandidates();
+    });
+  }
+
+  // Cohorts currently in Harvestable state, with yield-to-date summed from
+  // FIELD_ACTIVITY_LOG, awaiting manager close-out.
+  function loadHarvestableCohorts() {
+    apiCall('get-harvestable-cohorts', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load harvestable cohorts');
+        return;
+      }
+      state.harvestableCohorts = res.candidates;
+      renderHarvestableCohorts();
+      switchView('view-harvest-complete');
+    });
+  }
+
+  function renderHarvestableCohorts() {
+    let container = document.getElementById('harvest-complete-list');
+    container.innerHTML = '';
+
+    if (state.harvestableCohorts.length === 0) {
+      container.innerHTML = '<div class="empty-state">No cohorts currently in Harvestable state.</div>';
+      return;
+    }
+
+    state.harvestableCohorts.forEach(function(c) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+
+      let pctNote = '';
+      if (c.targetQtyLbs) {
+        let pct = Math.round((c.actualQtyLbsToDate / c.targetQtyLbs) * 100);
+        pctNote = '<div class="sr-meta">' + c.actualQtyLbsToDate + ' / ' + c.targetQtyLbs + ' ' + c.yieldUnit + ' logged (' + pct + '%)</div>';
+      } else {
+        pctNote = '<div class="sr-meta">' + c.actualQtyLbsToDate + ' ' + c.yieldUnit + ' logged</div>';
+      }
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + c.cohortId + '</span>' +
+          '<span class="badge">' + c.blockId + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + c.cropName + (c.variety ? ' (' + c.variety + ')' : '') + ' &middot; Beds ' + c.bedRange + '</div>' +
+        pctNote +
+        '<div class="sr-meta">' + c.harvestSessionCount + ' harvest session' + (c.harvestSessionCount === 1 ? '' : 's') + ' logged so far</div>' +
+        '<div class="sr-actions"><button class="hc-btn-verify">Verify Harvest Complete</button></div>';
+
+      row.querySelector('.hc-btn-verify').onclick = function() { verifyHarvestComplete(c.cohortId); };
+      container.appendChild(row);
+    });
+  }
+
+  function verifyHarvestComplete(cohortId) {
+    if (!confirm('Verify ' + cohortId + ' as harvest-complete? This moves it to Harvested and opens its beds for cleanup.')) return;
+    apiCall('verify-harvest-complete', { cohortId: cohortId, managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to verify harvest-complete');
+        return;
+      }
+      if (res.bedsMissing && res.bedsMissing.length > 0) {
+        alert('Cohort closed out, but these beds in its Bed_Range had no matching BED_MASTER row and were not updated: ' + res.bedsMissing.join(', '));
+      }
+      loadHarvestableCohorts();
     });
   }
 
