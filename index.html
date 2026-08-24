@@ -85,7 +85,8 @@
       <div style="display:flex; gap:6px;">
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">History</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Activity Log</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Reassignments</button>
       </div>
     </div>
     <div id="board-list"></div>
@@ -98,6 +99,16 @@
       <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Refresh</button>
     </div>
     <div id="history-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
+  <!-- VIEW 6: ACTIVITY LOG (completed sessions + cohort state changes, from FIELD_ACTIVITY_LOG) -->
+  <div id="view-activity-log" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Activity Log</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Refresh</button>
+    </div>
+    <div id="activity-log-list"></div>
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
@@ -130,7 +141,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log'];
 
   let state = {
     managerId: '',
@@ -140,7 +151,8 @@
     workers: [],
     history: [],
     harvestCandidates: [],
-    harvestableCohorts: []
+    harvestableCohorts: [],
+    activityLog: [] // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
   };
 
   function setConnStatus(status, label) {
@@ -216,7 +228,7 @@
     if (loggedOutId) {
       apiCall('logout', { workerId: loggedOutId }, function() {});
     }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [] };
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [] };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
@@ -279,6 +291,62 @@
         '<div class="sr-meta"><strong>' + h.fromWorkerName + '</strong> &rarr; <strong>' + h.toWorkerName + '</strong></div>' +
         (h.reason ? '<div class="sr-meta">Reason: ' + h.reason + '</div>' : '') +
         '<div class="sr-meta">By ' + h.reassignedByName + ' &middot; ' + when + '</div>';
+
+      container.appendChild(row);
+    });
+  }
+
+  // Completed-activity feed across ALL workers -- get-activity-history is
+  // called with managerId (validated server-side via isManagerRole_), so it
+  // returns every worker's FIELD_ACTIVITY_LOG rows rather than just one
+  // worker's own. This is where a completed session (or a cohort state
+  // change from Harvest Ready / Harvest Complete verification) actually
+  // shows up once it drops off the live board.
+  function loadActivityLog() {
+    apiCall('get-activity-history', { managerId: state.managerId, limit: 75 }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load activity log');
+        return;
+      }
+      state.activityLog = res.entries;
+      renderActivityLog();
+      switchView('view-activity-log');
+    });
+  }
+
+  function renderActivityLog() {
+    let container = document.getElementById('activity-log-list');
+    container.innerHTML = '';
+
+    if (state.activityLog.length === 0) {
+      container.innerHTML = '<div class="empty-state">No completed activity logged yet.</div>';
+      return;
+    }
+
+    state.activityLog.forEach(function(h) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
+
+      let bodyHtml;
+      if (h.isStateChange) {
+        bodyHtml = '<div class="sr-meta">' + h.fromState + ' &rarr; ' + h.toState + ' &middot; by ' + (h.verifiedBy || '-') + '</div>';
+      } else {
+        let qtyNote = h.quantity ? (' &middot; ' + h.quantity + (h.unit ? ' ' + h.unit : '')) : '';
+        bodyHtml = '<div class="sr-meta">' + h.workerName + ' &middot; ' +
+          (h.elapsedMinutes !== null ? h.elapsedMinutes + ' min active' : '') + qtyNote + '</div>';
+        if (h.exceptionFlag) {
+          bodyHtml += '<div class="sr-exception">&#9888; ' + h.exceptionType + '</div>';
+        }
+      }
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + (h.bedId || h.cohortId || '-') + '</span>' +
+          '<span class="badge">' + h.activityLabel + '</span>' +
+        '</div>' +
+        bodyHtml +
+        '<div class="sr-meta">' + when + '</div>';
 
       container.appendChild(row);
     });
