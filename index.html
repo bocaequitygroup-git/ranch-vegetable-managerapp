@@ -87,6 +87,9 @@
       <div style="display:flex; gap:6px;">
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="switchView('view-pack-shed')">Pack Shed</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="switchView('view-dispatch')">Dispatch</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScrSummary()">SCR</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Activity Log</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Reassignments</button>
       </div>
@@ -141,6 +144,45 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
+  <!-- VIEW 7: PACK SHED RECEIVING -->
+  <div id="view-pack-shed" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Pack Shed Receiving</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="runColdChainCheck()">Check Cold Chain</button>
+    </div>
+    <div class="form-group" style="margin-top:10px;">
+      <label for="ps-scan-input">Scan or Enter Crate QR</label>
+      <input type="text" id="ps-scan-input" placeholder="e.g. HRV:a1b2c3d4" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanHarvestCrate();">
+    </div>
+    <button class="btn-secondary" onclick="scanHarvestCrate()">Scan Crate</button>
+    <div id="ps-confirm-slot" style="margin-top:12px;"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
+  <!-- VIEW 8: DISPATCH -->
+  <div id="view-dispatch" class="card hidden">
+    <h2>Dispatch</h2>
+    <div class="form-group" style="margin-top:10px;">
+      <label for="dp-scan-input">Scan or Enter Pack Case QR</label>
+      <input type="text" id="dp-scan-input" placeholder="e.g. PACK:a1b2c3d4" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanPackCase();">
+    </div>
+    <button class="btn-secondary" onclick="scanPackCase()">Scan Case</button>
+    <div id="dp-confirm-slot" style="margin-top:12px;"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
+  <!-- VIEW 9: SCR DASHBOARD -->
+  <div id="view-scr" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Supply Continuity (SCR)</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScrSummary()">Refresh</button>
+    </div>
+    <div style="font-size:13px; color:#666; margin:6px 0 10px;" id="scr-week-label"></div>
+    <button class="btn-secondary" onclick="generateTodaysOrders()">Generate Today's Orders</button>
+    <div id="scr-list" style="margin-top:14px;"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
 <script>
   // This MUST be the WorkerApp project's deployed exec URL (same value as
   // WEB_APP_URL in WorkerApp.html) -- NOT this ManagerApp project's own exec
@@ -150,7 +192,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-pack-shed', 'view-dispatch', 'view-scr'];
 
   let state = {
     managerId: '',
@@ -161,7 +203,9 @@
     history: [],
     harvestCandidates: [],
     harvestableCohorts: [],
-    activityLog: [] // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
+    activityLog: [], // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
+    scrRows: [],
+    scrWeekEnding: ''
   };
 
   function setConnStatus(status, label) {
@@ -238,7 +282,7 @@
     if (loggedOutId) {
       apiCall('logout', { workerId: loggedOutId }, function() {});
     }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [] };
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scrRows: [], scrWeekEnding: '' };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
@@ -711,6 +755,205 @@
         });
       };
     }
+  }
+
+  // --- Pack Shed Receiving --------------------------------------------
+  // scan-harvest-crate (read-only lookup) feeds this confirmation panel;
+  // submit-packing-log (the actual write) fires on Confirm. Both are
+  // PackShed/Manager/Founder-gated server-side via isPackShedRole_.
+
+  function scanHarvestCrate() {
+    let raw = document.getElementById('ps-scan-input').value.trim();
+    if (!raw) return alert('Enter or scan a crate code.');
+    apiCall('scan-harvest-crate', { packShedUserId: state.managerId, harvestId: raw }, function(res) {
+      let slot = document.getElementById('ps-confirm-slot');
+      if (!res || !res.success) {
+        slot.innerHTML = '';
+        alert(res && res.error ? res.error : 'Scan failed');
+        return;
+      }
+      renderPackShedConfirm(res.crate);
+    });
+  }
+
+  function renderPackShedConfirm(crate) {
+    let slot = document.getElementById('ps-confirm-slot');
+    let transitHtml = crate.coldChainOverdue
+      ? '<div class="sr-exception">&#9888; Cold chain overdue -- ' + crate.transitMinutes + ' min in transit (limit ' + crate.coldChainMaxMinutes + ' min)</div>'
+      : '<div class="sr-meta">Transit time: ' + (crate.transitMinutes !== null ? crate.transitMinutes + ' min' : '-') + ' (limit ' + crate.coldChainMaxMinutes + ' min)</div>';
+
+    slot.innerHTML =
+      '<div class="panel">' +
+        '<h4>' + crate.harvestId + ' &middot; Bed ' + crate.bedId + ' &middot; ' + crate.cropName + '</h4>' +
+        '<div class="sr-meta">Logged: ' + crate.netWeightLbs + ' lbs net &middot; ' + crate.crateCount + ' crate(s) &middot; Grade ' + crate.qualityGrade + ' &middot; by ' + crate.workerId + '</div>' +
+        transitHtml +
+        '<div class="form-group"><label>Received Weight (lbs)</label><input type="number" step="0.1" min="0" class="ps-received" value="' + crate.netWeightLbs + '"></div>' +
+        '<div class="form-group"><label>Packed Weight (lbs)</label><input type="number" step="0.1" min="0" class="ps-packed" value="' + crate.netWeightLbs + '"></div>' +
+        '<div class="form-group"><label>Case Count</label><input type="number" step="1" min="1" class="ps-cases" value="1"></div>' +
+        '<div class="form-group"><label>Destination Restaurant ID</label><input type="text" class="ps-dest" placeholder="e.g. REST-CALLATIS" autocapitalize="off" autocorrect="off" spellcheck="false"></div>' +
+        '<button class="panel-confirm">Confirm Receiving &amp; Pack</button>' +
+      '</div>';
+
+    slot.querySelector('.panel-confirm').onclick = function() {
+      let received = slot.querySelector('.ps-received').value;
+      let packed = slot.querySelector('.ps-packed').value;
+      let cases = slot.querySelector('.ps-cases').value;
+      let dest = slot.querySelector('.ps-dest').value.trim();
+      if (!dest) return alert('Destination restaurant is required.');
+
+      apiCall('submit-packing-log', {
+        packerId: state.managerId,
+        harvestId: crate.harvestId,
+        receivedWeightLbs: received,
+        packedWeightLbs: packed,
+        caseCount: cases,
+        destinationRestaurantId: dest
+      }, function(res) {
+        if (!res || !res.success) {
+          alert(res && res.error ? res.error : 'Packing submission failed');
+          return;
+        }
+        let warn = res.coldChainViolation ? ' -- COLD CHAIN VIOLATION FLAGGED.' : '';
+        alert('Packed as ' + res.packCaseQr + ' (' + res.packedWeightLbs + ' lbs, ' + res.caseCount + ' case(s)).' + warn);
+        document.getElementById('ps-scan-input').value = '';
+        slot.innerHTML = '';
+      });
+    };
+  }
+
+  function runColdChainCheck() {
+    apiCall('check-cold-chain', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Cold chain check failed');
+        return;
+      }
+      let msg = 'Checked ' + res.checked + ' tote(s) (limit ' + res.maxMinutes + ' min). ';
+      msg += (res.flagged && res.flagged.length) ? 'Flagged: ' + res.flagged.join(', ') : 'No violations.';
+      alert(msg);
+    });
+  }
+
+  // --- Dispatch ---------------------------------------------------------
+  // scan-pack-case (read-only lookup) feeds this confirmation panel;
+  // dispatch-pack-case (the actual DISPATCH_LOG write, order reconciliation,
+  // and SCR recompute) fires on Confirm.
+
+  function scanPackCase() {
+    let raw = document.getElementById('dp-scan-input').value.trim();
+    if (!raw) return alert('Enter or scan a pack case code.');
+    apiCall('scan-pack-case', { userId: state.managerId, packId: raw }, function(res) {
+      let slot = document.getElementById('dp-confirm-slot');
+      if (!res || !res.success) {
+        slot.innerHTML = '';
+        alert(res && res.error ? res.error : 'Scan failed');
+        return;
+      }
+      renderDispatchConfirm(res.pack);
+    });
+  }
+
+  function renderDispatchConfirm(pack) {
+    let slot = document.getElementById('dp-confirm-slot');
+    slot.innerHTML =
+      '<div class="panel">' +
+        '<h4>' + pack.packId + ' &middot; ' + pack.cropName + ' &rarr; ' + pack.destinationRestaurantId + '</h4>' +
+        '<div class="sr-meta">' + pack.packedWeightLbs + ' lbs &middot; ' + pack.caseCount + ' case(s) &middot; packed by ' + pack.packerId + '</div>' +
+        '<div class="form-group"><label>Driver</label><input type="text" class="dp-driver" placeholder="Driver name"></div>' +
+        '<div class="form-group"><label>Vehicle</label><input type="text" class="dp-vehicle" placeholder="e.g. Truck 2"></div>' +
+        '<div class="form-group"><label>Departure Temp (&deg;F)</label><input type="number" step="0.1" class="dp-temp"></div>' +
+        '<button class="panel-confirm">Confirm Dispatch</button>' +
+      '</div>';
+
+    slot.querySelector('.panel-confirm').onclick = function() {
+      let driver = slot.querySelector('.dp-driver').value.trim();
+      let vehicle = slot.querySelector('.dp-vehicle').value.trim();
+      let temp = slot.querySelector('.dp-temp').value;
+      if (!driver) return alert('Driver is required.');
+      if (!vehicle) return alert('Vehicle is required.');
+      if (temp === '') return alert('Departure temp is required.');
+
+      apiCall('dispatch-pack-case', {
+        dispatcherId: state.managerId,
+        driverId: driver,
+        vehicleId: vehicle,
+        packCaseQr: 'PACK:' + pack.packId,
+        departureTempF: temp
+      }, function(res) {
+        if (!res || !res.success) {
+          alert(res && res.error ? res.error : 'Dispatch failed');
+          return;
+        }
+        let warn = res.tempOutOfRange ? ' -- TEMP OUT OF RANGE.' : '';
+        let orderNote = res.orderMatched ? (' Order ' + res.orderId + ' now ' + res.orderStatus + '.') : ' No matching pending order found.';
+        alert('Dispatched ' + res.packCaseQr + ' to ' + res.restaurantId + '.' + orderNote + warn);
+        document.getElementById('dp-scan-input').value = '';
+        slot.innerHTML = '';
+      });
+    };
+  }
+
+  // --- SCR Dashboard ------------------------------------------------------
+  // With no weekEnding, get-scr-summary live-computes the CURRENT week
+  // (camelCase fields, from computeScrForWeek_). A persisted SCR_MONITOR
+  // read (a past week) returns raw sheet-row field names instead -- both
+  // shapes are normalized in renderScrSummary below.
+
+  function loadScrSummary(weekEnding) {
+    apiCall('get-scr-summary', { managerId: state.managerId, weekEnding: weekEnding || '' }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load SCR summary');
+        return;
+      }
+      state.scrRows = res.rows || [];
+      state.scrWeekEnding = res.weekEnding;
+      renderScrSummary(res.source);
+      switchView('view-scr');
+    });
+  }
+
+  function renderScrSummary(source) {
+    let label = document.getElementById('scr-week-label');
+    label.textContent = 'Week ending ' + state.scrWeekEnding + (source === 'live' ? ' (live)' : ' (saved)');
+
+    let container = document.getElementById('scr-list');
+    container.innerHTML = '';
+
+    if (!state.scrRows || state.scrRows.length === 0) {
+      container.innerHTML = '<div class="empty-state">No demand or dispatch activity for this week.</div>';
+      return;
+    }
+
+    state.scrRows.forEach(function(r) {
+      let restaurantId = r.restaurantId || r.Restaurant_ID;
+      let cropId = r.cropId || r.Crop_ID;
+      let targetLbs = r.targetLbs !== undefined ? r.targetLbs : r.Weekly_Target_Lbs;
+      let actualLbs = r.actualLbs !== undefined ? r.actualLbs : r.Weekly_Actual_Lbs;
+      let scr = r.scr !== undefined ? r.scr : r.SCR;
+      let status = r.status || r.Status;
+
+      let row = document.createElement('div');
+      row.className = 'session-row';
+      let badgeClass = status === 'ON_TARGET' ? 'badge-active' : (status === 'SHORT' ? 'badge-danger' : 'badge-paused');
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + restaurantId + ' &middot; ' + cropId + '</span>' +
+          '<span class="badge ' + badgeClass + '">' + status + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + (actualLbs || 0) + ' / ' + (targetLbs || 0) + ' lbs' +
+          (scr !== null && scr !== '' && scr !== undefined ? ' &middot; SCR ' + Number(scr).toFixed(2) : '') + '</div>';
+      container.appendChild(row);
+    });
+  }
+
+  function generateTodaysOrders() {
+    apiCall('generate-restaurant-orders', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to generate orders');
+        return;
+      }
+      alert(res.ordersCreated + ' order(s) generated for ' + res.date + '.');
+      loadScrSummary();
+    });
   }
 </script>
 </body>
