@@ -121,7 +121,13 @@
       <h2 style="margin:0;">Harvest Ready</h2>
       <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Refresh</button>
     </div>
-    <div id="harvest-ready-list"></div>
+    <div class="form-group" style="margin-top:10px;">
+      <label for="hr-scan-input">Scan or Enter Bed QR</label>
+      <input type="text" id="hr-scan-input" placeholder="e.g. BED:B1-17" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanBedForHarvestReady();">
+    </div>
+    <button class="btn-secondary" onclick="scanBedForHarvestReady()">Scan Bed</button>
+    <div id="hr-confirm-slot" style="margin-top:12px;"></div>
+    <div id="harvest-ready-list" style="margin-top:16px;"></div>
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
@@ -384,17 +390,6 @@
       let row = document.createElement('div');
       row.className = 'session-row';
 
-      // Irrigation lock status is informational only (see
-      // handleGetHarvestCandidates_ in Code.gs) -- there's no lockout
-      // start-date tracked yet, so this can't confirm a cure period like
-      // the 14-day onion rule has actually elapsed, only whether the zone
-      // valve is locked closed right now. The manager still needs to check
-      // that against SOP themselves before verifying.
-      let lockNote = c.irrigationLockClosed === null ? ''
-        : (c.irrigationLockClosed
-          ? '<div class="sr-meta">Irrigation zone ' + c.irrigationZoneId + ' is currently locked closed &mdash; confirm cure/lockout duration meets SOP before verifying.</div>'
-          : '<div class="sr-meta">Irrigation zone ' + c.irrigationZoneId + ' is not locked closed.</div>');
-
       row.innerHTML =
         '<div class="session-row-top">' +
           '<span class="sr-bed">' + c.cohortId + '</span>' +
@@ -402,21 +397,116 @@
         '</div>' +
         '<div class="sr-meta">' + c.cropName + (c.variety ? ' (' + c.variety + ')' : '') + ' &middot; Beds ' + c.bedRange + '</div>' +
         (c.targetQtyLbs !== null ? '<div class="sr-meta">Target: ' + c.targetQtyLbs + ' lbs' + (c.targetHarvestDate ? ' by ' + c.targetHarvestDate : '') + '</div>' : '') +
-        lockNote +
+        harvestLockoutNoteHtml(c.lockout) +
         '<div class="sr-actions"><button class="hr-btn-verify">Verify Harvest Ready</button></div>';
 
-      row.querySelector('.hr-btn-verify').onclick = function() { verifyHarvestReady(c.cohortId); };
+      row.querySelector('.hr-btn-verify').onclick = function() { openHarvestReadyConfirm(c, null); };
       container.appendChild(row);
     });
   }
 
-  function verifyHarvestReady(cohortId) {
-    if (!confirm('Verify ' + cohortId + ' as harvest-ready? This moves it to Harvestable.')) return;
-    apiCall('verify-harvest-ready', { cohortId: cohortId, managerId: state.managerId }, function(res) {
+  // Curing lockout is now a computed status (see getOnionLockoutStatus_ in
+  // Database.gs) -- {applicable:false} for non-curing crops (renders
+  // nothing), or a real satisfied/not-satisfied verdict with elapsed days
+  // for Onions, instead of just "is the valve locked right now."
+  function harvestLockoutNoteHtml(lockout) {
+    if (!lockout || !lockout.applicable) return '';
+    let style = lockout.satisfied ? '' : ' style="color:#c62828;"';
+    return '<div class="sr-meta"' + style + '>' + lockout.message + '</div>';
+  }
+
+  // Bed-QR-driven entry point onto the Harvest Ready confirmation panel --
+  // scans/resolves a bed straight to its cohort candidate via
+  // scan-bed-harvest-ready, rather than only being reachable by picking a
+  // cohort off the Growing-state list below.
+  function scanBedForHarvestReady() {
+    let raw = document.getElementById('hr-scan-input').value.trim().toUpperCase();
+    if (!raw) return alert('Enter or scan a bed QR code.');
+
+    apiCall('scan-bed-harvest-ready', { bedId: raw, managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Scan failed.');
+        return;
+      }
+      document.getElementById('hr-scan-input').value = '';
+      openHarvestReadyConfirm(res.candidate, res.bedId);
+    });
+  }
+
+  // Opens the scouting-checklist + curing-lockout confirmation panel for
+  // one candidate -- fed either by a list row click or by
+  // scanBedForHarvestReady() above. Replaces the old single confirm()
+  // dialog: every scouting criterion must be checked, and a lockout
+  // override (if needed) requires an explicit reason.
+  function openHarvestReadyConfirm(candidate, scannedBedId) {
+    let slot = document.getElementById('hr-confirm-slot');
+    let lockout = candidate.lockout || { applicable: false };
+
+    let overrideHtml = '';
+    if (lockout.applicable && !lockout.satisfied) {
+      overrideHtml =
+        '<div class="sr-meta" style="color:#c62828; margin-top:10px;">' + lockout.message + '</div>' +
+        '<label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin-top:8px;">' +
+          '<input type="checkbox" id="hr-override-check" style="width:auto;"> Override and verify anyway' +
+        '</label>' +
+        '<div class="form-group"><label>Override Reason (required to override)</label><input type="text" id="hr-override-reason" placeholder="Why proceed despite the lockout?"></div>';
+    } else if (lockout.applicable) {
+      overrideHtml = '<div class="sr-meta" style="margin-top:10px;">' + lockout.message + '</div>';
+    }
+
+    slot.innerHTML =
+      '<div class="panel">' +
+        '<h4>Confirm Harvest Ready &mdash; ' + candidate.cohortId + (scannedBedId ? ' (scanned bed ' + scannedBedId + ')' : '') + '</h4>' +
+        '<div class="sr-meta">' + candidate.cropName + (candidate.variety ? ' (' + candidate.variety + ')' : '') + ' &middot; Beds ' + candidate.bedRange + '</div>' +
+        '<div class="form-group" style="margin-top:10px;">' +
+          '<label>Scouting Checklist &mdash; confirm all before verifying</label>' +
+          harvestChecklistItemHtml('hr-chk-size', 'Correct size') +
+          harvestChecklistItemHtml('hr-chk-color', 'Correct color') +
+          harvestChecklistItemHtml('hr-chk-pest', 'No major pest/disease issues') +
+          harvestChecklistItemHtml('hr-chk-water', 'No water stress') +
+        '</div>' +
+        '<div class="form-group"><label>Scouting Notes (optional)</label><input type="text" id="hr-scout-notes" placeholder="Anything worth recording..."></div>' +
+        overrideHtml +
+        '<button class="hr-btn-confirm">Confirm Verify Harvest Ready</button>' +
+        '<button class="btn-secondary" style="margin-top:6px;">Cancel</button>' +
+      '</div>';
+
+    slot.querySelector('.hr-btn-confirm').onclick = function() { confirmHarvestReady(candidate.cohortId, lockout); };
+    slot.querySelector('.btn-secondary').onclick = function() { slot.innerHTML = ''; };
+  }
+
+  function harvestChecklistItemHtml(id, label) {
+    return '<label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin-bottom:6px;">' +
+      '<input type="checkbox" id="' + id + '" style="width:auto;"> ' + label +
+    '</label>';
+  }
+
+  function confirmHarvestReady(cohortId, lockout) {
+    let scouting = {
+      sizeOk: document.getElementById('hr-chk-size').checked,
+      colorOk: document.getElementById('hr-chk-color').checked,
+      pestDiseaseOk: document.getElementById('hr-chk-pest').checked,
+      noWaterStressOk: document.getElementById('hr-chk-water').checked
+    };
+    let scoutingNotes = document.getElementById('hr-scout-notes').value;
+
+    let payload = { cohortId: cohortId, managerId: state.managerId, scouting: scouting, scoutingNotes: scoutingNotes };
+
+    if (lockout && lockout.applicable && !lockout.satisfied) {
+      let overrideEl = document.getElementById('hr-override-check');
+      let reasonEl = document.getElementById('hr-override-reason');
+      if (overrideEl && overrideEl.checked) {
+        payload.overrideLockout = true;
+        payload.overrideReason = reasonEl ? reasonEl.value : '';
+      }
+    }
+
+    apiCall('verify-harvest-ready', payload, function(res) {
       if (!res || !res.success) {
         alert(res && res.error ? res.error : 'Failed to verify harvest-ready');
         return;
       }
+      document.getElementById('hr-confirm-slot').innerHTML = '';
       loadHarvestCandidates();
     });
   }
