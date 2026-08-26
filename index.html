@@ -85,6 +85,7 @@
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <h2 style="margin:0;">Open Field Sessions</h2>
       <div style="display:flex; gap:6px;">
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadDailyQueue()">Today</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="switchView('view-pack-shed')">Pack Shed</button>
@@ -171,6 +172,20 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
+  <!-- VIEW 10: TODAY (Daily Manager Work Queue -- LifecycleEngine/ActivityEngine build) -->
+  <div id="view-today" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Today</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadDailyQueue()">Refresh</button>
+    </div>
+    <div id="today-generated-at" style="font-size:12px; color:#888; margin:4px 0 10px;"></div>
+    <div id="today-counts" style="display:flex; gap:8px; margin-bottom:14px;"></div>
+    <div id="today-must-do"></div>
+    <div id="today-attention"></div>
+    <div id="today-routine"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
   <!-- VIEW 9: SCR DASHBOARD -->
   <div id="view-scr" class="card hidden">
     <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -192,7 +207,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-pack-shed', 'view-dispatch', 'view-scr'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-pack-shed', 'view-dispatch', 'view-scr', 'view-today'];
 
   let state = {
     managerId: '',
@@ -205,7 +220,8 @@
     harvestableCohorts: [],
     activityLog: [], // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
     scrRows: [],
-    scrWeekEnding: ''
+    scrWeekEnding: '',
+    dailyQueue: null
   };
 
   function setConnStatus(status, label) {
@@ -282,7 +298,7 @@
     if (loggedOutId) {
       apiCall('logout', { workerId: loggedOutId }, function() {});
     }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scrRows: [], scrWeekEnding: '' };
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scrRows: [], scrWeekEnding: '', dailyQueue: null };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
@@ -954,6 +970,97 @@
       alert(res.ordersCreated + ' order(s) generated for ' + res.date + '.');
       loadScrSummary();
     });
+  }
+
+  // --- Today (Daily Manager Work Queue) -----------------------------------
+  // Pure read -- getDailyManagerQueue_ (ActivityEngine.gs) computes this
+  // live from COHORT_STATUS/CROP_ROUTINE_SCHEDULE/EXCEPTION_LOG/etc. on
+  // every call, nothing is cached server-side. COHORT_STATUS itself is
+  // only as fresh as the last recalculate-lifecycle run (daily ~4:30am
+  // trigger, or the on-demand button below) -- if a manager just planted a
+  // cohort a minute ago, its routine-task items won't appear here until
+  // the next recalculation.
+  const QUEUE_BUCKET_META = {
+    mustDo: { label: 'Must Do', emoji: '🔴', badgeClass: 'badge-danger' },
+    attention: { label: 'Attention', emoji: '🟠', badgeClass: 'badge-paused' },
+    routine: { label: 'Routine', emoji: '🟢', badgeClass: 'badge-active' }
+  };
+
+  function loadDailyQueue() {
+    apiCall('get-daily-queue', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load today\'s queue');
+        return;
+      }
+      state.dailyQueue = res.queue;
+      renderDailyQueue();
+      switchView('view-today');
+    });
+  }
+
+  function recalculateLifecycle() {
+    apiCall('recalculate-lifecycle', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to recalculate lifecycle');
+        return;
+      }
+      alert('Recalculated ' + res.cohortsProcessed + ' cohort(s) -- ' + res.updated + ' updated, ' +
+        res.inserted + ' new, ' + res.noPlantingDateYet + ' with no planting date yet.');
+      loadDailyQueue();
+    });
+  }
+
+  function renderDailyQueue() {
+    let q = state.dailyQueue;
+    if (!q) return;
+
+    document.getElementById('today-generated-at').innerHTML =
+      'Generated ' + new Date(q.generatedAt).toLocaleString() +
+      ' &middot; <a href="#" onclick="recalculateLifecycle(); return false;">Recalculate now</a>';
+
+    let countsEl = document.getElementById('today-counts');
+    countsEl.innerHTML = '';
+    ['mustDo', 'attention', 'routine'].forEach(function(key) {
+      let meta = QUEUE_BUCKET_META[key];
+      let span = document.createElement('span');
+      span.className = 'badge ' + meta.badgeClass;
+      span.style.fontSize = '13px';
+      span.textContent = meta.emoji + ' ' + meta.label + ': ' + q.counts[key];
+      countsEl.appendChild(span);
+    });
+
+    renderQueueSection_('today-must-do', 'Must Do', q.mustDo, 'badge-danger');
+    renderQueueSection_('today-attention', 'Attention', q.attention, 'badge-paused');
+    renderQueueSection_('today-routine', 'Routine', q.routine, 'badge-active');
+  }
+
+  function renderQueueSection_(containerId, heading, items, badgeClass) {
+    let container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    if (!items || items.length === 0) return;
+
+    let h = document.createElement('h4');
+    h.style.margin = '14px 0 8px';
+    h.style.fontSize = '14px';
+    h.textContent = heading + ' (' + items.length + ')';
+    container.appendChild(h);
+
+    items.forEach(function(item) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + (item.cohortId || item.bedId || item.category) + '</span>' +
+          '<span class="badge ' + badgeClass + '">' + item.category + '</span>' +
+        '</div>' +
+        '<div class="sr-meta"><strong>' + item.title + '</strong></div>' +
+        (item.detail ? '<div class="sr-meta">' + item.detail + '</div>' : '') +
+        (item.blockId ? '<div class="sr-meta">Block ' + item.blockId + '</div>' : '');
+      container.appendChild(row);
+    });
+
+    if (items.length === 0) container.innerHTML = '<div class="empty-state">Nothing here.</div>';
   }
 </script>
 </body>
