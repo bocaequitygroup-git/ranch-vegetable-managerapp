@@ -1010,13 +1010,43 @@
     });
   }
 
+  // Phase 5 dry run: same computation as recalculateLifecycle() above, but
+  // nothing is written to COHORT_STATUS -- lets a manager review what a
+  // real recalculation would change (e.g. after Phase 0/1 agronomic data
+  // review, or before trusting the Daily Work Queue as primary) without
+  // committing it. Full per-cohort diff goes to the browser console rather
+  // than the alert -- with 244+ cohorts a full diff would be unreadable as
+  // a popup, so the alert stays to a summary and the console holds the
+  // detail for whoever's actually reviewing it.
+  function previewLifecycleRecalc() {
+    apiCall('recalculate-lifecycle', { managerId: state.managerId, dryRun: true }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to preview lifecycle recalculation');
+        return;
+      }
+      console.log('Dry-run lifecycle recalculation -- would-be changes:', res.changes);
+      var msg = 'DRY RUN -- nothing was written.\n\n' +
+        res.cohortsProcessed + ' cohort(s) checked:\n' +
+        '  ' + res.updated + ' would update\n' +
+        '  ' + res.inserted + ' would be newly created\n' +
+        '  ' + res.unchanged + ' unchanged\n' +
+        '  ' + res.noPlantingDateYet + ' with no planting date yet';
+      if (res.changes && res.changes.length) {
+        msg += '\n\nFull per-cohort diff logged to the browser console' +
+          (res.changeLogTruncated ? ' (list capped -- counts above are still exact).' : '.');
+      }
+      alert(msg);
+    });
+  }
+
   function renderDailyQueue() {
     let q = state.dailyQueue;
     if (!q) return;
 
     document.getElementById('today-generated-at').innerHTML =
       'Generated ' + new Date(q.generatedAt).toLocaleString() +
-      ' &middot; <a href="#" onclick="recalculateLifecycle(); return false;">Recalculate now</a>';
+      ' &middot; <a href="#" onclick="recalculateLifecycle(); return false;">Recalculate now</a>' +
+      ' &middot; <a href="#" onclick="previewLifecycleRecalc(); return false;">Preview changes (dry run)</a>';
 
     let countsEl = document.getElementById('today-counts');
     countsEl.innerHTML = '';
