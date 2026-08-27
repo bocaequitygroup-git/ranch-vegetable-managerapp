@@ -22,6 +22,11 @@
     .badge-pausetype-break { background: #78909c; }
     .badge-pausetype-lunch { background: #6d4c41; }
     .badge-pausetype-eod { background: #37474f; }
+    .badge-sev-low { background: #78909c; }
+    .badge-sev-medium { background: #f9a825; }
+    .badge-sev-high { background: #ef6c00; }
+    .badge-sev-critical { background: #c62828; }
+    .finding-resolved { opacity: 0.55; }
     .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
@@ -85,14 +90,11 @@
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <h2 style="margin:0;">Open Field Sessions</h2>
       <div style="display:flex; gap:6px;">
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadDailyQueue()">Today</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="switchView('view-pack-shed')">Pack Shed</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="switchView('view-dispatch')">Dispatch</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScrSummary()">SCR</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Activity Log</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Reassignments</button>
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScoutFindings()">Scouting</button>
       </div>
     </div>
     <div id="board-subtitle" style="font-size:13px; color:#666; margin-bottom:10px;"></div>
@@ -116,6 +118,31 @@
       <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Refresh</button>
     </div>
     <div id="activity-log-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
+  <!-- VIEW 7: SCOUTING FINDINGS (SCOUT_FINDING, most-recent feed / per-bed progression) -->
+  <div id="view-scouting" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Scouting Findings</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="refreshScoutFindings()">Refresh</button>
+    </div>
+    <div class="form-group" style="margin-top:10px;">
+      <label for="scout-bed-filter">Bed (leave blank for most recent across all beds)</label>
+      <input type="text" id="scout-bed-filter" placeholder="e.g. B1-17" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') refreshScoutFindings();">
+    </div>
+    <div class="form-group">
+      <label for="scout-domain-filter">Domain</label>
+      <select id="scout-domain-filter" onchange="refreshScoutFindings()">
+        <option value="">All Domains</option>
+        <option value="PlantCondition">Plant Condition</option>
+        <option value="PestPressure">Pest Pressure</option>
+        <option value="DiseasePressure">Disease Pressure</option>
+        <option value="SoilWater">Soil &amp; Water</option>
+        <option value="WeedCompetition">Weed &amp; Competition</option>
+      </select>
+    </div>
+    <div id="scouting-list"></div>
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
@@ -145,59 +172,6 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
-  <!-- VIEW 7: PACK SHED RECEIVING -->
-  <div id="view-pack-shed" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Pack Shed Receiving</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="runColdChainCheck()">Check Cold Chain</button>
-    </div>
-    <div class="form-group" style="margin-top:10px;">
-      <label for="ps-scan-input">Scan or Enter Crate QR</label>
-      <input type="text" id="ps-scan-input" placeholder="e.g. HRV:a1b2c3d4" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanHarvestCrate();">
-    </div>
-    <button class="btn-secondary" onclick="scanHarvestCrate()">Scan Crate</button>
-    <div id="ps-confirm-slot" style="margin-top:12px;"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
-  <!-- VIEW 8: DISPATCH -->
-  <div id="view-dispatch" class="card hidden">
-    <h2>Dispatch</h2>
-    <div class="form-group" style="margin-top:10px;">
-      <label for="dp-scan-input">Scan or Enter Pack Case QR</label>
-      <input type="text" id="dp-scan-input" placeholder="e.g. PACK:a1b2c3d4" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanPackCase();">
-    </div>
-    <button class="btn-secondary" onclick="scanPackCase()">Scan Case</button>
-    <div id="dp-confirm-slot" style="margin-top:12px;"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
-  <!-- VIEW 10: TODAY (Daily Manager Work Queue -- LifecycleEngine/ActivityEngine build) -->
-  <div id="view-today" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Today</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadDailyQueue()">Refresh</button>
-    </div>
-    <div id="today-generated-at" style="font-size:12px; color:#888; margin:4px 0 10px;"></div>
-    <div id="today-counts" style="display:flex; gap:8px; margin-bottom:14px;"></div>
-    <div id="today-must-do"></div>
-    <div id="today-attention"></div>
-    <div id="today-routine"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
-  <!-- VIEW 9: SCR DASHBOARD -->
-  <div id="view-scr" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Supply Continuity (SCR)</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScrSummary()">Refresh</button>
-    </div>
-    <div style="font-size:13px; color:#666; margin:6px 0 10px;" id="scr-week-label"></div>
-    <button class="btn-secondary" onclick="generateTodaysOrders()">Generate Today's Orders</button>
-    <div id="scr-list" style="margin-top:14px;"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
 <script>
   // This MUST be the WorkerApp project's deployed exec URL (same value as
   // WEB_APP_URL in WorkerApp.html) -- NOT this ManagerApp project's own exec
@@ -207,7 +181,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-pack-shed', 'view-dispatch', 'view-scr', 'view-today'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-scouting'];
 
   let state = {
     managerId: '',
@@ -219,9 +193,7 @@
     harvestCandidates: [],
     harvestableCohorts: [],
     activityLog: [], // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
-    scrRows: [],
-    scrWeekEnding: '',
-    dailyQueue: null
+    scoutFindings: [] // SCOUT_FINDING rows via get-scout-findings -- most-recent feed or one bed's progression
   };
 
   function setConnStatus(status, label) {
@@ -298,7 +270,7 @@
     if (loggedOutId) {
       apiCall('logout', { workerId: loggedOutId }, function() {});
     }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scrRows: [], scrWeekEnding: '', dailyQueue: null };
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scoutFindings: [] };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
@@ -423,7 +395,82 @@
     });
   }
 
-  // Cohorts currently in Growing state, awaiting manager sign-off before
+  // Entry point from the board's Scouting button -- clears any prior
+  // bed/domain filter so it always opens on the most-recent-across-all-beds
+  // feed, then loads.
+  function loadScoutFindings() {
+    document.getElementById('scout-bed-filter').value = '';
+    document.getElementById('scout-domain-filter').value = '';
+    refreshScoutFindings();
+  }
+
+  // Re-fetches using whatever's currently in the bed/domain filter fields --
+  // called on Refresh, Enter in the bed field, and on domain dropdown
+  // change, so the list always reflects what's on screen. An empty bed
+  // field means "most recent across all beds" (get-scout-findings with no
+  // bedId), matching how Harvest Ready/Complete leave their scan fields
+  // blank between scans rather than needing a separate "clear" action.
+  function refreshScoutFindings() {
+    let bedId = document.getElementById('scout-bed-filter').value.trim();
+    let domain = document.getElementById('scout-domain-filter').value;
+    let payload = domain ? { domain: domain } : {};
+    if (bedId) payload.bedId = bedId;
+
+    apiCall('get-scout-findings', payload, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load scouting findings');
+        return;
+      }
+      state.scoutFindings = res.findings;
+      renderScoutFindings();
+      switchView('view-scouting');
+    });
+  }
+
+  var SEVERITY_BADGE_CLASS_ = { LOW: 'badge-sev-low', MEDIUM: 'badge-sev-medium', HIGH: 'badge-sev-high', CRITICAL: 'badge-sev-critical' };
+
+  function renderScoutFindings() {
+    let container = document.getElementById('scouting-list');
+    container.innerHTML = '';
+
+    if (state.scoutFindings.length === 0) {
+      container.innerHTML = '<div class="empty-state">No scouting findings logged yet.</div>';
+      return;
+    }
+
+    state.scoutFindings.forEach(function(f) {
+      let row = document.createElement('div');
+      row.className = 'session-row' + (f.exceptionResolved ? ' finding-resolved' : '');
+
+      let sevClass = 'badge ' + (SEVERITY_BADGE_CLASS_[f.severity] || 'badge-sev-low');
+      let when = f.timestamp ? new Date(f.timestamp).toLocaleString() : '';
+
+      let actionHtml = '';
+      if (f.requiresAction) {
+        actionHtml = f.exceptionResolved
+          ? '<div class="sr-meta">&#10003; Exception resolved</div>'
+          : '<div class="sr-exception">&#9888; Open exception (' + f.exceptionId + ')</div>';
+      }
+      let photoHtml = f.photoUrl
+        ? '<div class="sr-meta"><a href="' + f.photoUrl + '" target="_blank">View photo</a></div>'
+        : '';
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + f.bedId + '</span>' +
+          '<span class="' + sevClass + '">' + f.severity + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + f.domainLabel + ' &middot; ' + f.symptom + '</div>' +
+        '<div class="sr-meta">' + f.workerName + ' &middot; ' + when + (f.locationDetail ? (' &middot; ' + f.locationDetail) : '') + '</div>' +
+        (f.notes ? '<div class="sr-meta">' + f.notes + '</div>' : '') +
+        actionHtml +
+        photoHtml;
+
+      container.appendChild(row);
+    });
+  }
+
+
   // FIELD_STATE_SEQUENCE can advance them to Harvestable.
   function loadHarvestCandidates() {
     apiCall('get-harvest-candidates', { managerId: state.managerId }, function(res) {
@@ -771,326 +818,6 @@
         });
       };
     }
-  }
-
-  // --- Pack Shed Receiving --------------------------------------------
-  // scan-harvest-crate (read-only lookup) feeds this confirmation panel;
-  // submit-packing-log (the actual write) fires on Confirm. Both are
-  // PackShed/Manager/Founder-gated server-side via isPackShedRole_.
-
-  function scanHarvestCrate() {
-    let raw = document.getElementById('ps-scan-input').value.trim();
-    if (!raw) return alert('Enter or scan a crate code.');
-    apiCall('scan-harvest-crate', { packShedUserId: state.managerId, harvestId: raw }, function(res) {
-      let slot = document.getElementById('ps-confirm-slot');
-      if (!res || !res.success) {
-        slot.innerHTML = '';
-        alert(res && res.error ? res.error : 'Scan failed');
-        return;
-      }
-      renderPackShedConfirm(res.crate);
-    });
-  }
-
-  function renderPackShedConfirm(crate) {
-    let slot = document.getElementById('ps-confirm-slot');
-    let transitHtml = crate.coldChainOverdue
-      ? '<div class="sr-exception">&#9888; Cold chain overdue -- ' + crate.transitMinutes + ' min in transit (limit ' + crate.coldChainMaxMinutes + ' min)</div>'
-      : '<div class="sr-meta">Transit time: ' + (crate.transitMinutes !== null ? crate.transitMinutes + ' min' : '-') + ' (limit ' + crate.coldChainMaxMinutes + ' min)</div>';
-
-    slot.innerHTML =
-      '<div class="panel">' +
-        '<h4>' + crate.harvestId + ' &middot; Bed ' + crate.bedId + ' &middot; ' + crate.cropName + '</h4>' +
-        '<div class="sr-meta">Logged: ' + crate.netWeightLbs + ' lbs net &middot; ' + crate.crateCount + ' crate(s) &middot; Grade ' + crate.qualityGrade + ' &middot; by ' + crate.workerId + '</div>' +
-        transitHtml +
-        '<div class="form-group"><label>Received Weight (lbs)</label><input type="number" step="0.1" min="0" class="ps-received" value="' + crate.netWeightLbs + '"></div>' +
-        '<div class="form-group"><label>Packed Weight (lbs)</label><input type="number" step="0.1" min="0" class="ps-packed" value="' + crate.netWeightLbs + '"></div>' +
-        '<div class="form-group"><label>Case Count</label><input type="number" step="1" min="1" class="ps-cases" value="1"></div>' +
-        '<div class="form-group"><label>Destination Restaurant ID</label><input type="text" class="ps-dest" placeholder="e.g. REST-CALLATIS" autocapitalize="off" autocorrect="off" spellcheck="false"></div>' +
-        '<button class="panel-confirm">Confirm Receiving &amp; Pack</button>' +
-      '</div>';
-
-    slot.querySelector('.panel-confirm').onclick = function() {
-      let received = slot.querySelector('.ps-received').value;
-      let packed = slot.querySelector('.ps-packed').value;
-      let cases = slot.querySelector('.ps-cases').value;
-      let dest = slot.querySelector('.ps-dest').value.trim();
-      if (!dest) return alert('Destination restaurant is required.');
-
-      apiCall('submit-packing-log', {
-        packerId: state.managerId,
-        harvestId: crate.harvestId,
-        receivedWeightLbs: received,
-        packedWeightLbs: packed,
-        caseCount: cases,
-        destinationRestaurantId: dest
-      }, function(res) {
-        if (!res || !res.success) {
-          alert(res && res.error ? res.error : 'Packing submission failed');
-          return;
-        }
-        let warn = res.coldChainViolation ? ' -- COLD CHAIN VIOLATION FLAGGED.' : '';
-        alert('Packed as ' + res.packCaseQr + ' (' + res.packedWeightLbs + ' lbs, ' + res.caseCount + ' case(s)).' + warn);
-        document.getElementById('ps-scan-input').value = '';
-        slot.innerHTML = '';
-      });
-    };
-  }
-
-  function runColdChainCheck() {
-    apiCall('check-cold-chain', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Cold chain check failed');
-        return;
-      }
-      let msg = 'Checked ' + res.checked + ' tote(s) (limit ' + res.maxMinutes + ' min). ';
-      msg += (res.flagged && res.flagged.length) ? 'Flagged: ' + res.flagged.join(', ') : 'No violations.';
-      alert(msg);
-    });
-  }
-
-  // --- Dispatch ---------------------------------------------------------
-  // scan-pack-case (read-only lookup) feeds this confirmation panel;
-  // dispatch-pack-case (the actual DISPATCH_LOG write, order reconciliation,
-  // and SCR recompute) fires on Confirm.
-
-  function scanPackCase() {
-    let raw = document.getElementById('dp-scan-input').value.trim();
-    if (!raw) return alert('Enter or scan a pack case code.');
-    apiCall('scan-pack-case', { userId: state.managerId, packId: raw }, function(res) {
-      let slot = document.getElementById('dp-confirm-slot');
-      if (!res || !res.success) {
-        slot.innerHTML = '';
-        alert(res && res.error ? res.error : 'Scan failed');
-        return;
-      }
-      renderDispatchConfirm(res.pack);
-    });
-  }
-
-  function renderDispatchConfirm(pack) {
-    let slot = document.getElementById('dp-confirm-slot');
-    slot.innerHTML =
-      '<div class="panel">' +
-        '<h4>' + pack.packId + ' &middot; ' + pack.cropName + ' &rarr; ' + pack.destinationRestaurantId + '</h4>' +
-        '<div class="sr-meta">' + pack.packedWeightLbs + ' lbs &middot; ' + pack.caseCount + ' case(s) &middot; packed by ' + pack.packerId + '</div>' +
-        '<div class="form-group"><label>Driver</label><input type="text" class="dp-driver" placeholder="Driver name"></div>' +
-        '<div class="form-group"><label>Vehicle</label><input type="text" class="dp-vehicle" placeholder="e.g. Truck 2"></div>' +
-        '<div class="form-group"><label>Departure Temp (&deg;F)</label><input type="number" step="0.1" class="dp-temp"></div>' +
-        '<button class="panel-confirm">Confirm Dispatch</button>' +
-      '</div>';
-
-    slot.querySelector('.panel-confirm').onclick = function() {
-      let driver = slot.querySelector('.dp-driver').value.trim();
-      let vehicle = slot.querySelector('.dp-vehicle').value.trim();
-      let temp = slot.querySelector('.dp-temp').value;
-      if (!driver) return alert('Driver is required.');
-      if (!vehicle) return alert('Vehicle is required.');
-      if (temp === '') return alert('Departure temp is required.');
-
-      apiCall('dispatch-pack-case', {
-        dispatcherId: state.managerId,
-        driverId: driver,
-        vehicleId: vehicle,
-        packCaseQr: 'PACK:' + pack.packId,
-        departureTempF: temp
-      }, function(res) {
-        if (!res || !res.success) {
-          alert(res && res.error ? res.error : 'Dispatch failed');
-          return;
-        }
-        let warn = res.tempOutOfRange ? ' -- TEMP OUT OF RANGE.' : '';
-        let orderNote = res.orderMatched ? (' Order ' + res.orderId + ' now ' + res.orderStatus + '.') : ' No matching pending order found.';
-        alert('Dispatched ' + res.packCaseQr + ' to ' + res.restaurantId + '.' + orderNote + warn);
-        document.getElementById('dp-scan-input').value = '';
-        slot.innerHTML = '';
-      });
-    };
-  }
-
-  // --- SCR Dashboard ------------------------------------------------------
-  // With no weekEnding, get-scr-summary live-computes the CURRENT week
-  // (camelCase fields, from computeScrForWeek_). A persisted SCR_MONITOR
-  // read (a past week) returns raw sheet-row field names instead -- both
-  // shapes are normalized in renderScrSummary below.
-
-  function loadScrSummary(weekEnding) {
-    apiCall('get-scr-summary', { managerId: state.managerId, weekEnding: weekEnding || '' }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load SCR summary');
-        return;
-      }
-      state.scrRows = res.rows || [];
-      state.scrWeekEnding = res.weekEnding;
-      renderScrSummary(res.source);
-      switchView('view-scr');
-    });
-  }
-
-  function renderScrSummary(source) {
-    let label = document.getElementById('scr-week-label');
-    label.textContent = 'Week ending ' + state.scrWeekEnding + (source === 'live' ? ' (live)' : ' (saved)');
-
-    let container = document.getElementById('scr-list');
-    container.innerHTML = '';
-
-    if (!state.scrRows || state.scrRows.length === 0) {
-      container.innerHTML = '<div class="empty-state">No demand or dispatch activity for this week.</div>';
-      return;
-    }
-
-    state.scrRows.forEach(function(r) {
-      let restaurantId = r.restaurantId || r.Restaurant_ID;
-      let cropId = r.cropId || r.Crop_ID;
-      let targetLbs = r.targetLbs !== undefined ? r.targetLbs : r.Weekly_Target_Lbs;
-      let actualLbs = r.actualLbs !== undefined ? r.actualLbs : r.Weekly_Actual_Lbs;
-      let scr = r.scr !== undefined ? r.scr : r.SCR;
-      let status = r.status || r.Status;
-
-      let row = document.createElement('div');
-      row.className = 'session-row';
-      let badgeClass = status === 'ON_TARGET' ? 'badge-active' : (status === 'SHORT' ? 'badge-danger' : 'badge-paused');
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + restaurantId + ' &middot; ' + cropId + '</span>' +
-          '<span class="badge ' + badgeClass + '">' + status + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + (actualLbs || 0) + ' / ' + (targetLbs || 0) + ' lbs' +
-          (scr !== null && scr !== '' && scr !== undefined ? ' &middot; SCR ' + Number(scr).toFixed(2) : '') + '</div>';
-      container.appendChild(row);
-    });
-  }
-
-  function generateTodaysOrders() {
-    apiCall('generate-restaurant-orders', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to generate orders');
-        return;
-      }
-      alert(res.ordersCreated + ' order(s) generated for ' + res.date + '.');
-      loadScrSummary();
-    });
-  }
-
-  // --- Today (Daily Manager Work Queue) -----------------------------------
-  // Pure read -- getDailyManagerQueue_ (ActivityEngine.gs) computes this
-  // live from COHORT_STATUS/CROP_ROUTINE_SCHEDULE/EXCEPTION_LOG/etc. on
-  // every call, nothing is cached server-side. COHORT_STATUS itself is
-  // only as fresh as the last recalculate-lifecycle run (daily ~4:30am
-  // trigger, or the on-demand button below) -- if a manager just planted a
-  // cohort a minute ago, its routine-task items won't appear here until
-  // the next recalculation.
-  const QUEUE_BUCKET_META = {
-    mustDo: { label: 'Must Do', emoji: '🔴', badgeClass: 'badge-danger' },
-    attention: { label: 'Attention', emoji: '🟠', badgeClass: 'badge-paused' },
-    routine: { label: 'Routine', emoji: '🟢', badgeClass: 'badge-active' }
-  };
-
-  function loadDailyQueue() {
-    apiCall('get-daily-queue', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load today\'s queue');
-        return;
-      }
-      state.dailyQueue = res.queue;
-      renderDailyQueue();
-      switchView('view-today');
-    });
-  }
-
-  function recalculateLifecycle() {
-    apiCall('recalculate-lifecycle', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to recalculate lifecycle');
-        return;
-      }
-      alert('Recalculated ' + res.cohortsProcessed + ' cohort(s) -- ' + res.updated + ' updated, ' +
-        res.inserted + ' new, ' + res.noPlantingDateYet + ' with no planting date yet.');
-      loadDailyQueue();
-    });
-  }
-
-  // Phase 5 dry run: same computation as recalculateLifecycle() above, but
-  // nothing is written to COHORT_STATUS -- lets a manager review what a
-  // real recalculation would change (e.g. after Phase 0/1 agronomic data
-  // review, or before trusting the Daily Work Queue as primary) without
-  // committing it. Full per-cohort diff goes to the browser console rather
-  // than the alert -- with 244+ cohorts a full diff would be unreadable as
-  // a popup, so the alert stays to a summary and the console holds the
-  // detail for whoever's actually reviewing it.
-  function previewLifecycleRecalc() {
-    apiCall('recalculate-lifecycle', { managerId: state.managerId, dryRun: true }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to preview lifecycle recalculation');
-        return;
-      }
-      console.log('Dry-run lifecycle recalculation -- would-be changes:', res.changes);
-      var msg = 'DRY RUN -- nothing was written.\n\n' +
-        res.cohortsProcessed + ' cohort(s) checked:\n' +
-        '  ' + res.updated + ' would update\n' +
-        '  ' + res.inserted + ' would be newly created\n' +
-        '  ' + res.unchanged + ' unchanged\n' +
-        '  ' + res.noPlantingDateYet + ' with no planting date yet';
-      if (res.changes && res.changes.length) {
-        msg += '\n\nFull per-cohort diff logged to the browser console' +
-          (res.changeLogTruncated ? ' (list capped -- counts above are still exact).' : '.');
-      }
-      alert(msg);
-    });
-  }
-
-  function renderDailyQueue() {
-    let q = state.dailyQueue;
-    if (!q) return;
-
-    document.getElementById('today-generated-at').innerHTML =
-      'Generated ' + new Date(q.generatedAt).toLocaleString() +
-      ' &middot; <a href="#" onclick="recalculateLifecycle(); return false;">Recalculate now</a>' +
-      ' &middot; <a href="#" onclick="previewLifecycleRecalc(); return false;">Preview changes (dry run)</a>';
-
-    let countsEl = document.getElementById('today-counts');
-    countsEl.innerHTML = '';
-    ['mustDo', 'attention', 'routine'].forEach(function(key) {
-      let meta = QUEUE_BUCKET_META[key];
-      let span = document.createElement('span');
-      span.className = 'badge ' + meta.badgeClass;
-      span.style.fontSize = '13px';
-      span.textContent = meta.emoji + ' ' + meta.label + ': ' + q.counts[key];
-      countsEl.appendChild(span);
-    });
-
-    renderQueueSection_('today-must-do', 'Must Do', q.mustDo, 'badge-danger');
-    renderQueueSection_('today-attention', 'Attention', q.attention, 'badge-paused');
-    renderQueueSection_('today-routine', 'Routine', q.routine, 'badge-active');
-  }
-
-  function renderQueueSection_(containerId, heading, items, badgeClass) {
-    let container = document.getElementById(containerId);
-    container.innerHTML = '';
-
-    if (!items || items.length === 0) return;
-
-    let h = document.createElement('h4');
-    h.style.margin = '14px 0 8px';
-    h.style.fontSize = '14px';
-    h.textContent = heading + ' (' + items.length + ')';
-    container.appendChild(h);
-
-    items.forEach(function(item) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + (item.cohortId || item.bedId || item.category) + '</span>' +
-          '<span class="badge ' + badgeClass + '">' + item.category + '</span>' +
-        '</div>' +
-        '<div class="sr-meta"><strong>' + item.title + '</strong></div>' +
-        (item.detail ? '<div class="sr-meta">' + item.detail + '</div>' : '') +
-        (item.blockId ? '<div class="sr-meta">Block ' + item.blockId + '</div>' : '');
-      container.appendChild(row);
-    });
-
-    if (items.length === 0) container.innerHTML = '<div class="empty-state">Nothing here.</div>';
   }
 </script>
 </body>
