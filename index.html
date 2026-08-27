@@ -55,6 +55,32 @@
     .panel .form-group { margin-bottom: 10px; }
     .panel select, .panel input { font-size: 14px; padding: 8px; }
     .panel button { font-size: 13px; padding: 8px; }
+
+    /* Manager Queue ("Today") */
+    .queue-summary { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .queue-summary .qs-pill { flex: 1; min-width: 84px; border-radius: 6px; padding: 8px 6px; text-align: center; color: #fff; }
+    .qs-pill .qs-count { font-size: 20px; font-weight: bold; display: block; line-height: 1.1; }
+    .qs-pill .qs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.9; }
+    .qs-mustdo { background: #c62828; }
+    .qs-attention { background: #ef6c00; }
+    .qs-routine { background: #546e7a; }
+
+    .queue-section { margin-bottom: 18px; }
+    .queue-section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; user-select: none; }
+    .queue-section-header .qsh-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .queue-section-header h3 { margin: 0; font-size: 14px; flex: 1; }
+    .queue-section-header .qsh-count { font-size: 12px; color: #666; font-weight: normal; }
+    .queue-section-header .qsh-caret { font-size: 11px; color: #888; }
+    .queue-section.collapsed .queue-group { display: none; }
+
+    .queue-group { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; background: #fafafa; overflow: hidden; }
+    .queue-group-head { padding: 8px 12px; background: #eceff1; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+    .queue-group-head .qg-title { font-weight: bold; font-size: 14px; }
+    .queue-group-head .qg-sub { font-size: 12px; color: #666; }
+    .queue-item { padding: 8px 12px; border-top: 1px solid #e0e0e0; font-size: 13px; }
+    .queue-item .qi-title { font-weight: bold; }
+    .queue-item .qi-category { font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; color: #888; margin-right: 6px; }
+    .queue-item .qi-detail { color: #666; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -90,6 +116,7 @@
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <h2 style="margin:0;">Open Field Sessions</h2>
       <div style="display:flex; gap:6px;">
+        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#2e7d32;" onclick="loadQueue()">Today</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
         <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Activity Log</button>
@@ -146,6 +173,19 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
   </div>
 
+  <!-- VIEW 8: TODAY (Manager Work Queue -- ActivityEngine.gs get-daily-queue,
+       Must Do / Attention / Routine, grouped by cohort where the item has one) -->
+  <div id="view-queue" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Today</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadQueue()">Refresh</button>
+    </div>
+    <div id="queue-generated-at" style="font-size:12px; color:#888; margin-bottom:10px;"></div>
+    <div id="queue-summary" class="queue-summary"></div>
+    <div id="queue-body"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+  </div>
+
   <!-- VIEW 4: HARVEST READY VERIFICATION -->
   <div id="view-harvest-ready" class="card hidden">
     <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -181,7 +221,7 @@
   // backend, since that's the project with doPost/routeAction_/the data layer.
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
 
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-scouting'];
+  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-scouting', 'view-queue'];
 
   let state = {
     managerId: '',
@@ -193,7 +233,8 @@
     harvestCandidates: [],
     harvestableCohorts: [],
     activityLog: [], // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
-    scoutFindings: [] // SCOUT_FINDING rows via get-scout-findings -- most-recent feed or one bed's progression
+    scoutFindings: [], // SCOUT_FINDING rows via get-scout-findings -- most-recent feed or one bed's progression
+    queue: null // { generatedAt, counts, mustDo, attention, routine } from get-daily-queue (ActivityEngine.gs)
   };
 
   function setConnStatus(status, label) {
@@ -270,7 +311,7 @@
     if (loggedOutId) {
       apiCall('logout', { workerId: loggedOutId }, function() {});
     }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scoutFindings: [] };
+    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scoutFindings: [], queue: null };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
@@ -470,6 +511,143 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // TODAY (Manager Work Queue) -- get-daily-queue (ActivityEngine.gs
+  // getDailyManagerQueue_). Pure calculated view: nothing here writes
+  // anything, matching the backend's own contract. Items with a cohortId
+  // are grouped into one card per cohort so a manager reads "TOM-014 --
+  // Bed B07: Irrigation due, Scouting due" instead of four separate rows
+  // for the same plant. Items with no cohortId (open-ended exceptions tied
+  // only to a bed, pack-shed/dispatch pipeline items) render as their own
+  // single-item card since there's nothing to group them under.
+  // ---------------------------------------------------------------------
+  var QUEUE_BUCKETS_ = [
+    { key: 'mustDo', domId: 'mustDo', label: 'Must Do', dotColor: '#c62828' },
+    { key: 'attention', domId: 'attention', label: 'Attention', dotColor: '#ef6c00' },
+    { key: 'routine', domId: 'routine', label: 'Routine', dotColor: '#546e7a' }
+  ];
+
+  function loadQueue() {
+    apiCall('get-daily-queue', { managerId: state.managerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load queue');
+        return;
+      }
+      state.queue = res.queue;
+      renderQueue();
+      switchView('view-queue');
+    });
+  }
+
+  // Groups a bucket's flat item list into { cohortId: [items] } plus a
+  // separate ungrouped[] array for items with no cohortId, preserving
+  // first-seen order for both cohort groups and ungrouped items.
+  function groupQueueItems_(items) {
+    var groupsByCohort_ = {};
+    var cohortOrder = [];
+    var ungrouped = [];
+
+    items.forEach(function(item) {
+      if (!item.cohortId) {
+        ungrouped.push(item);
+        return;
+      }
+      if (!groupsByCohort_[item.cohortId]) {
+        groupsByCohort_[item.cohortId] = [];
+        cohortOrder.push(item.cohortId);
+      }
+      groupsByCohort_[item.cohortId].push(item);
+    });
+
+    return {
+      cohortOrder: cohortOrder,
+      groupsByCohort: groupsByCohort_,
+      ungrouped: ungrouped
+    };
+  }
+
+  function queueItemHtml_(item) {
+    return '<div class="queue-item">' +
+      '<span class="qi-category">' + (item.category || '') + '</span>' +
+      '<span class="qi-title">' + item.title + '</span>' +
+      (item.detail ? '<div class="qi-detail">' + item.detail + '</div>' : '') +
+      '</div>';
+  }
+
+  // One card per cohort: header line is Crop -- Bed (Cohort_ID), followed
+  // by every queue item for that cohort. Location is whichever of
+  // blockId/bedId the item actually carries -- the backend's item shapes
+  // aren't consistent about which field they use (cohort-driven items use
+  // blockId, exception/pipeline items use bedId), so both are checked.
+  function queueGroupHtml_(cohortId, items) {
+    var first = items[0];
+    var location = first.blockId || first.bedId || '';
+    var titleParts = [];
+    if (first.cropId) titleParts.push(first.cropId);
+    titleParts.push(location ? ('Bed ' + location) : cohortId);
+
+    return '<div class="queue-group">' +
+      '<div class="queue-group-head">' +
+        '<span class="qg-title">' + titleParts.join(' &middot; ') + '</span>' +
+        '<span class="qg-sub">' + cohortId + '</span>' +
+      '</div>' +
+      items.map(queueItemHtml_).join('') +
+      '</div>';
+  }
+
+  function queueUngroupedHtml_(item) {
+    var location = item.blockId || item.bedId || '';
+    return '<div class="queue-group">' +
+      (location ? '<div class="queue-group-head"><span class="qg-title">Bed ' + location + '</span></div>' : '') +
+      queueItemHtml_(item) +
+      '</div>';
+  }
+
+  function toggleQueueSection_(domId) {
+    var section = document.getElementById('queue-section-' + domId);
+    if (section) section.classList.toggle('collapsed');
+  }
+
+  function renderQueue() {
+    var q = state.queue;
+    var genAt = document.getElementById('queue-generated-at');
+    genAt.textContent = q.generatedAt ? ('As of ' + new Date(q.generatedAt).toLocaleString()) : '';
+
+    var summary = document.getElementById('queue-summary');
+    summary.innerHTML =
+      '<div class="qs-pill qs-mustdo"><span class="qs-count">' + q.counts.mustDo + '</span><span class="qs-label">Must Do</span></div>' +
+      '<div class="qs-pill qs-attention"><span class="qs-count">' + q.counts.attention + '</span><span class="qs-label">Attention</span></div>' +
+      '<div class="qs-pill qs-routine"><span class="qs-count">' + q.counts.routine + '</span><span class="qs-label">Routine</span></div>';
+
+    var body = document.getElementById('queue-body');
+    body.innerHTML = '';
+
+    QUEUE_BUCKETS_.forEach(function(bucketDef) {
+      var items = q[bucketDef.key] || [];
+      var grouped = groupQueueItems_(items);
+
+      var groupsHtml = grouped.cohortOrder
+        .map(function(cid) { return queueGroupHtml_(cid, grouped.groupsByCohort[cid]); })
+        .join('') +
+        grouped.ungrouped.map(queueUngroupedHtml_).join('');
+
+      var section = document.createElement('div');
+      section.className = 'queue-section' + (bucketDef.key === 'routine' ? ' collapsed' : '');
+      section.id = 'queue-section-' + bucketDef.domId;
+      section.innerHTML =
+        '<div class="queue-section-header" onclick="toggleQueueSection_(\'' + bucketDef.domId + '\')">' +
+          '<span class="qsh-dot" style="background:' + bucketDef.dotColor + ';"></span>' +
+          '<h3>' + bucketDef.label + ' <span class="qsh-count">(' + items.length + ')</span></h3>' +
+          '<span class="qsh-caret">&#9660;</span>' +
+        '</div>' +
+        '<div class="queue-group-list">' +
+        (items.length === 0
+          ? '<div class="empty-state">Nothing here.</div>'
+          : groupsHtml) +
+        '</div>';
+      body.appendChild(section);
+    });
+  }
 
   // FIELD_STATE_SEQUENCE can advance them to Harvestable.
   function loadHarvestCandidates() {
