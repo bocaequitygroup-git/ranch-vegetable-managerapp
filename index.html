@@ -1,1002 +1,1096 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <base target="_top">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f4f6f8; color: #333; }
-    .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 640px; margin: 0 auto 16px; }
-    .hidden { display: none !important; }
-    .form-group { margin-bottom: 16px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
-    input, select, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-    button { background: #2e7d32; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
-    button:hover { background: #1b5e20; }
-    button.btn-danger { background: #c62828; }
-    button.btn-secondary { background: #666; }
-    button.btn-warn { background: #ef6c00; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
-    .badge-active { background: #2e7d32; }
-    .badge-danger { background: #c62828; }
-    .badge-paused { background: #ef6c00; }
-    .badge-pausetype-break { background: #78909c; }
-    .badge-pausetype-lunch { background: #6d4c41; }
-    .badge-pausetype-eod { background: #37474f; }
-    .badge-sev-low { background: #78909c; }
-    .badge-sev-medium { background: #f9a825; }
-    .badge-sev-high { background: #ef6c00; }
-    .badge-sev-critical { background: #c62828; }
-    .finding-resolved { opacity: 0.55; }
-    .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
-    #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
-      background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
-    #app-header.hidden { display: none !important; }
-    .conn-status { display: flex; align-items: center; gap: 6px; }
-    .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #888; flex-shrink: 0; }
-    .conn-dot.online { background: #66bb6a; }
-    .conn-dot.checking { background: #ffb300; }
-    .conn-dot.offline { background: #e53935; }
-    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
-    #btn-logout:hover { background: #37474f; }
-    #btn-refresh { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
-    .header-user { font-weight: bold; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1E4D3A">
+<title>VPOS Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   VPOS ManagerApp - field operations console (mobile first, outdoor legible)
+   Type: Atkinson Hyperlegible (built for legibility in glare / at a glance).
+   Palette: pale sage field, white work surfaces, leaf-green chrome, and
+   severity colours that carry meaning (never decoration).
+   ========================================================================== */
+:root {
+  color-scheme: light;
+  --field: #E8EDE6;
+  --paper: #FFFFFF;
+  --ink: #16281F;
+  --muted: #54665B;
+  --leaf: #1E4D3A;
+  --leaf-soft: #DCE8DF;
+  --line: #C7D2C9;
+  --blue: #1257B8;
+  --crit: #B3261E;  --crit-soft: #F7DEDB;
+  --high: #B5460F;  --high-soft: #F9E4D6;
+  --med:  #86590A;  --med-soft:  #F4E8C8;
+  --low:  #3F6B4F;  --low-soft:  #DCE8DF;
+  --radius: 12px;
+  --tap: 48px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--field); color: var(--ink);
+  font: 400 17px/1.45 "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+[hidden] { display: none !important; }
+h1, h2, h3, p, dl, dd, dt { margin: 0; }
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
-    .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
-    .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-    .session-row .sr-bed { font-weight: bold; font-size: 15px; }
-    .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
-    .session-row .sr-exception { font-size: 12px; color: #c62828; font-weight: bold; margin-bottom: 8px; }
-    .session-row .sr-reassigned { font-size: 12px; color: #ef6c00; font-weight: bold; margin-bottom: 8px; }
-    .session-row .sr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; min-width: 90px; }
+/* ---------- header ---------- */
+#app-header {
+  position: sticky; top: 0; z-index: 20; background: var(--leaf); color: #fff;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+}
+.hd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font-weight: 700; font-size: 19px; letter-spacing: .01em; }
+.conn { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.conn i { width: 10px; height: 10px; border-radius: 50%; background: #9aa89f; display: inline-block; }
+.conn[data-s="online"] i  { background: #6EE7A0; }
+.conn[data-s="offline"] i { background: #FBBF24; }
+.conn[data-s="error"] i   { background: #FF8A80; }
+.hd-id { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.who b { display: block; line-height: 1.2; }
+.who span { font-size: 14px; opacity: .85; }
+.hd-btns { display: flex; gap: 8px; }
+.btn-hd {
+  min-height: 40px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+  background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.55); font-weight: 700; font-size: 15px;
+}
+.btn-hd:active { background: rgba(255,255,255,.15); }
+#demo-strip { background: #FFF3C4; color: #5b4300; font-size: 14px; padding: 6px 16px; text-align: center; border-bottom: 1px solid #E9D48A; }
 
-    .panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; }
-    .panel h4 { margin: 0 0 8px; font-size: 13px; color: #444; }
-    .panel .form-group { margin-bottom: 10px; }
-    .panel select, .panel input { font-size: 14px; padding: 8px; }
-    .panel button { font-size: 13px; padding: 8px; }
+/* ---------- layout ---------- */
+main { max-width: 760px; margin: 0 auto; padding: 16px 16px 40px; }
+.viewbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.viewbar h2 { font-size: 23px; line-height: 1.2; flex: 1; }
+h2[tabindex]:focus { outline: none; }
+.meta { font-size: 14px; color: var(--muted); }
 
-    /* Manager Queue ("Today") */
-    .queue-summary { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-    .queue-summary .qs-pill { flex: 1; min-width: 84px; border-radius: 6px; padding: 8px 6px; text-align: center; color: #fff; }
-    .qs-pill .qs-count { font-size: 20px; font-weight: bold; display: block; line-height: 1.1; }
-    .qs-pill .qs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.9; }
-    .qs-mustdo { background: #c62828; }
-    .qs-attention { background: #ef6c00; }
-    .qs-routine { background: #546e7a; }
+/* ---------- buttons ---------- */
+.btn {
+  min-height: var(--tap); padding: 0 18px; border-radius: 10px; cursor: pointer; font-weight: 700;
+  background: var(--paper); color: var(--leaf); border: 1.5px solid var(--leaf);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn:active { background: var(--leaf-soft); }
+.btn-primary { background: var(--leaf); color: #fff; }
+.btn-primary:active { background: #163A2B; }
+.btn[disabled] { opacity: .55; cursor: progress; }
+.btn-back { min-height: 44px; padding: 0 14px 0 10px; }
+.btn-block { width: 100%; }
+.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-    .queue-section { margin-bottom: 18px; }
-    .queue-section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; user-select: none; }
-    .queue-section-header .qsh-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .queue-section-header h3 { margin: 0; font-size: 14px; flex: 1; }
-    .queue-section-header .qsh-count { font-size: 12px; color: #666; font-weight: normal; }
-    .queue-section-header .qsh-caret { font-size: 11px; color: #888; }
-    .queue-section.collapsed .queue-group { display: none; }
+/* ---------- login ---------- */
+.login { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 18px; margin-top: 18px; }
+.login h2 { font-size: 26px; margin-bottom: 4px; }
+.login p { color: var(--muted); margin-bottom: 18px; }
+.field { display: block; margin-bottom: 14px; }
+.field span { display: block; font-weight: 700; margin-bottom: 6px; }
+.input {
+  width: 100%; min-height: var(--tap); padding: 8px 12px; border: 1.5px solid #8FA096; border-radius: 10px; background: #fff;
+}
+.form-error { color: var(--crit); background: var(--crit-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
 
-    .queue-group { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; background: #fafafa; overflow: hidden; }
-    .queue-group-head { padding: 8px 12px; background: #eceff1; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
-    .queue-group-head .qg-title { font-weight: bold; font-size: 14px; }
-    .queue-group-head .qg-sub { font-size: 12px; color: #666; }
-    .queue-item { padding: 8px 12px; border-top: 1px solid #e0e0e0; font-size: 13px; }
-    .queue-item .qi-title { font-weight: bold; }
-    .queue-item .qi-category { font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; color: #888; margin-right: 6px; }
-    .queue-item .qi-detail { color: #666; margin-top: 2px; }
-  </style>
+/* ---------- board ---------- */
+.nav-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+.tile {
+  min-height: 88px; padding: 12px 14px; border-radius: var(--radius); background: var(--paper); border: 1.5px solid var(--line);
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 10px;
+  text-align: left; cursor: pointer; font-weight: 700; font-size: 17px; line-height: 1.2; color: var(--ink);
+}
+.tile .ico { width: 28px; height: 28px; color: var(--leaf); flex: none; }
+.tile { min-width: 0; overflow-wrap: break-word; }
+.tile:active { background: var(--leaf-soft); }
+.tile.primary { background: var(--leaf); color: #fff; border-color: var(--leaf); }
+.tile.primary .ico { color: #fff; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin: 0 0 10px; }
+.sec-head h2 { font-size: 21px; }
+
+.session { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+.session-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.session h3 { font-size: 20px; line-height: 1.2; }
+.sub { color: var(--muted); font-size: 15px; }
+.elapsed { text-align: right; font-size: 30px; font-weight: 700; line-height: 1; color: var(--leaf); white-space: nowrap; }
+.elapsed small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; margin: 14px 0; }
+.facts dt { font-size: 13px; color: var(--muted); }
+.facts dd { font-weight: 700; overflow-wrap: anywhere; }
+
+/* ---------- lists ---------- */
+.list { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.item { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+.item-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.item-title { font-weight: 700; }
+.item-time { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.item p { margin-top: 3px; }
+.item .sub { margin-top: 3px; }
+.stripe { border-left: 6px solid var(--low); }
+.stripe.crit { border-left-color: var(--crit); }
+.stripe.high { border-left-color: var(--high); }
+.stripe.med  { border-left-color: var(--med); }
+.stripe.low  { border-left-color: var(--low); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; padding: 2px 10px 2px 8px; border-radius: 999px; background: var(--low-soft); color: var(--low); }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.chip.crit { background: var(--crit-soft); color: var(--crit); }
+.chip.high { background: var(--high-soft); color: var(--high); }
+.chip.med  { background: var(--med-soft);  color: var(--med); }
+.chip.neutral { background: #E3E8E4; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.filters .field { margin: 0; }
+.filters .field span { font-size: 14px; margin-bottom: 4px; }
+.seg { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.seg button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--leaf); background: var(--paper); font-weight: 700; color: var(--leaf); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--leaf); color: #fff; }
+
+.bucket { margin-bottom: 22px; }
+.bucket-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.bucket-head h3 { font-size: 20px; }
+.count { min-width: 34px; text-align: center; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: #E3E8E4; }
+.group { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+.group-head { padding: 10px 16px; background: #F3F6F2; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.group-head b { font-size: 18px; }
+
+.empty, .errbox { background: var(--paper); border: 1.5px dashed #9FB0A4; border-radius: var(--radius); padding: 22px 18px; text-align: left; }
+.empty h3, .errbox h3 { font-size: 19px; margin-bottom: 4px; }
+.empty p, .errbox p { color: var(--muted); }
+.errbox { border-style: solid; border-color: var(--crit); background: #FFF7F6; }
+.errbox .btn { margin-top: 12px; }
+.skeleton { height: 92px; border-radius: var(--radius); background: linear-gradient(90deg,#DDE5DE,#EDF1EC,#DDE5DE); background-size: 200% 100%; margin-bottom: 12px; animation: sk 1.3s linear infinite; }
+@keyframes sk { to { background-position: -200% 0; } }
+
+.scan { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.scan-row { display: flex; gap: 8px; }
+.scan-row .input { flex: 1; min-width: 0; }
+.scan label { font-weight: 700; display: block; margin-bottom: 6px; }
+.item.hit { background: #FFF6CF; outline: 3px solid #E5B800; outline-offset: -3px; }
+.verify-row { margin-top: 10px; }
+
+/* ---------- sheet (dialog) ---------- */
+dialog.sheet {
+  border: 0; padding: 0; width: 100%; max-width: 560px; margin: auto auto 0; border-radius: 18px 18px 0 0;
+  background: var(--paper); color: var(--ink); box-shadow: 0 -10px 40px rgba(20,40,30,.28);
+  padding-bottom: env(safe-area-inset-bottom, 0px); max-height: 92vh; overflow: auto;
+}
+dialog.sheet::backdrop { background: rgba(15,30,22,.5); }
+dialog.sheet[open] { animation: rise .18s ease-out; }
+@keyframes rise { from { transform: translateY(24px); opacity: .4; } }
+.sheet-in { padding: 20px 18px 18px; }
+.sheet h3 { font-size: 22px; margin-bottom: 8px; }
+.sheet .sum { background: #F3F6F2; border-radius: 10px; padding: 10px 12px; margin: 10px 0 14px; }
+.sheet .sum div { display: flex; justify-content: space-between; gap: 12px; }
+.sheet .sum span { color: var(--muted); }
+.sheet .form-error { margin: 0 0 12px; }
+.sheet-actions { display: grid; gap: 10px; margin-top: 14px; }
+.hint { font-size: 14px; color: var(--muted); margin: -6px 0 12px; }
+video#scan-video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4 / 3; object-fit: cover; }
+
+#toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 12px; max-width: min(92vw, 520px); z-index: 60;
+  box-shadow: 0 6px 24px rgba(0,0,0,.3);
+}
+@media (min-width: 640px) {
+  .nav-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  dialog.sheet { border-radius: 18px; margin: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
 </head>
 <body>
 
-  <div id="app-header" class="hidden">
-    <div class="conn-status">
-      <span id="conn-dot" class="conn-dot"></span>
-      <span id="conn-text">Not connected</span>
-    </div>
-    <span id="header-user-name" class="header-user"></span>
-    <div style="display:flex; gap:8px;">
-      <button id="btn-refresh" onclick="loadBoard()">Refresh</button>
-      <button id="btn-logout" onclick="appLogout()">Log Out</button>
+<header id="app-header">
+  <div class="hd-row">
+    <div class="brand">VPOS Manager</div>
+    <div class="conn" id="conn" data-s="idle" role="status"><i></i><span id="conn-text">Not connected</span></div>
+  </div>
+  <div class="hd-id" id="hd-id" hidden>
+    <div class="who"><b id="hd-name"></b><span id="hd-role"></span></div>
+    <div class="hd-btns">
+      <button class="btn-hd" data-act="refresh" id="btn-refresh" type="button">Refresh</button>
+      <button class="btn-hd" data-act="logout" id="btn-logout" type="button">Log out</button>
     </div>
   </div>
+</header>
+<div id="demo-strip" hidden>Demo mode with sample data. Set WEB_APP_URL in the script to connect to your WorkerApp backend.</div>
 
-  <!-- VIEW 1: MANAGER LOGIN -->
-  <div id="view-login" class="card">
-    <h2>Manager Login</h2>
-    <div class="form-group">
-      <label for="login-worker-id">User ID</label>
-      <input type="text" id="login-worker-id" placeholder="e.g. USR-001" autocapitalize="off" autocorrect="off" spellcheck="false">
-    </div>
-    <div class="form-group">
-      <label for="login-pin">PIN</label>
-      <input type="password" id="login-pin" placeholder="****">
-    </div>
-    <button onclick="appLogin()">Sign In</button>
-  </div>
+<main>
 
-  <!-- VIEW 2: BOARD -->
-  <div id="view-board" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Open Field Sessions</h2>
-      <div style="display:flex; gap:6px;">
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#2e7d32;" onclick="loadQueue()">Today</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Harvest Ready</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Harvest Complete</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Activity Log</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Reassignments</button>
-        <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadScoutFindings()">Scouting</button>
+  <!-- 1. login -->
+  <section id="view-login" class="view" hidden aria-labelledby="h-login">
+    <div class="login">
+      <h2 id="h-login" tabindex="-1">Manager sign in</h2>
+      <p>Use your worker ID and PIN. Only managers and founders can open this console.</p>
+      <div class="form-error" id="login-error" role="alert" hidden></div>
+      <label class="field"><span>Worker ID</span>
+        <input class="input" id="login-id" autocomplete="username" autocapitalize="characters" spellcheck="false" inputmode="text"></label>
+      <label class="field"><span>PIN</span>
+        <input class="input" id="login-pin" type="password" autocomplete="current-password" inputmode="numeric"></label>
+      <button class="btn btn-primary btn-block" id="login-btn" data-act="login" type="button">Sign in</button>
+      <p class="hint" id="demo-hint" hidden style="margin:14px 0 0">Demo sign-ins: usr-manager1 / 1234 (Manager), usr-founder1 / 1234 (Founder), usr-worker1 / 1234 (Worker, will be refused here).</p>
+    </div>
+  </section>
+
+  <!-- 2. board -->
+  <section id="view-board" class="view" hidden aria-labelledby="h-board">
+    <div class="nav-grid" id="board-nav">
+      <button class="tile primary" data-act="nav" data-view="view-queue" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>Today</button>
+      <button class="tile" data-act="nav" data-view="view-harvest-ready" type="button"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>Harvest ready</button>
+      <button class="tile" data-act="nav" data-view="view-harvest-complete" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></svg>Harvest complete</button>
+      <button class="tile" data-act="nav" data-view="view-activity-log" type="button"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Activity log</button>
+      <button class="tile" data-act="nav" data-view="view-history" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/></svg>Reassignments</button>
+      <button class="tile" data-act="nav" data-view="view-scouting" type="button"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>Scouting</button>
+    </div>
+    <div class="sec-head"><h2 id="h-board" tabindex="-1">Open field sessions</h2><span class="meta" id="board-meta"></span></div>
+    <div id="board-list"></div>
+  </section>
+
+  <!-- 3. reassignment history -->
+  <section id="view-history" class="view" hidden aria-labelledby="h-history">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-history" tabindex="-1">Reassignments</h2></div>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- 4. activity log -->
+  <section id="view-activity-log" class="view" hidden aria-labelledby="h-activity">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-activity" tabindex="-1">Activity log</h2></div>
+    <div class="seg" id="activity-seg" role="group" aria-label="Entry type">
+      <button type="button" data-act="activity-type" data-type="all" aria-pressed="true">All</button>
+      <button type="button" data-act="activity-type" data-type="session" aria-pressed="false">Sessions</button>
+      <button type="button" data-act="activity-type" data-type="state" aria-pressed="false">Cohort changes</button>
+    </div>
+    <div class="filters" style="grid-template-columns:minmax(0,1fr)">
+      <label class="field"><span>Worker</span><select class="input" id="activity-worker"><option value="">All workers</option></select></label>
+    </div>
+    <div id="activity-list"></div>
+  </section>
+
+  <!-- 5. scouting -->
+  <section id="view-scouting" class="view" hidden aria-labelledby="h-scouting">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-scouting" tabindex="-1">Scouting findings</h2></div>
+    <div class="filters">
+      <label class="field"><span>Bed</span><select class="input" id="scout-bed"><option value="">All beds</option></select></label>
+      <label class="field"><span>Domain</span><select class="input" id="scout-domain">
+        <option value="">All domains</option><option>PlantCondition</option><option>PestPressure</option><option>DiseasePressure</option><option>SoilWater</option><option>WeedCompetition</option></select></label>
+      <label class="field"><span>Status</span><select class="input" id="scout-status">
+        <option value="">All statuses</option><option value="OPEN">Open</option><option value="RESOLVED">Resolved</option></select></label>
+    </div>
+    <div id="scout-list"></div>
+  </section>
+
+  <!-- 6. today / queue -->
+  <section id="view-queue" class="view" hidden aria-labelledby="h-queue">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-queue" tabindex="-1">Today</h2></div>
+    <p class="meta" id="queue-meta" style="margin:-6px 0 14px"></p>
+    <div id="queue-list"></div>
+  </section>
+
+  <!-- 7. harvest ready -->
+  <section id="view-harvest-ready" class="view" hidden aria-labelledby="h-hr">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-hr" tabindex="-1">Harvest ready</h2></div>
+    <div class="scan">
+      <label for="scan-input">Scan or type a bed</label>
+      <div class="scan-row">
+        <input class="input" id="scan-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Bed ID or QR code">
+        <button class="btn" data-act="scan-lookup" type="button">Find</button>
+        <button class="btn btn-primary" data-act="scan-camera" type="button" aria-label="Scan with camera">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M4 12h16"/></svg>Scan</button>
       </div>
     </div>
-    <div id="board-subtitle" style="font-size:13px; color:#666; margin-bottom:10px;"></div>
-    <div id="board-list"></div>
-  </div>
+    <div id="hr-list"></div>
+  </section>
 
-  <!-- VIEW 3: REASSIGNMENT HISTORY -->
-  <div id="view-history" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Reassignment History</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHistory()">Refresh</button>
-    </div>
-    <div id="history-list"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
+  <!-- 8. harvest complete -->
+  <section id="view-harvest-complete" class="view" hidden aria-labelledby="h-hc">
+    <div class="viewbar"><button class="btn btn-back" data-act="back" type="button">Board</button><h2 id="h-hc" tabindex="-1">Harvest complete</h2></div>
+    <div id="hc-list"></div>
+  </section>
 
-  <!-- VIEW 6: ACTIVITY LOG (completed sessions + cohort state changes, from FIELD_ACTIVITY_LOG) -->
-  <div id="view-activity-log" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Activity Log</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadActivityLog()">Refresh</button>
-    </div>
-    <div id="activity-log-list"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
+</main>
 
-  <!-- VIEW 7: SCOUTING FINDINGS (SCOUT_FINDING, most-recent feed / per-bed progression) -->
-  <div id="view-scouting" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Scouting Findings</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="refreshScoutFindings()">Refresh</button>
-    </div>
-    <div class="form-group" style="margin-top:10px;">
-      <label for="scout-bed-filter">Bed (leave blank for most recent across all beds)</label>
-      <input type="text" id="scout-bed-filter" placeholder="e.g. B1-17" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') refreshScoutFindings();">
-    </div>
-    <div class="form-group">
-      <label for="scout-domain-filter">Domain</label>
-      <select id="scout-domain-filter" onchange="refreshScoutFindings()">
-        <option value="">All Domains</option>
-        <option value="PlantCondition">Plant Condition</option>
-        <option value="PestPressure">Pest Pressure</option>
-        <option value="DiseasePressure">Disease Pressure</option>
-        <option value="SoilWater">Soil &amp; Water</option>
-        <option value="WeedCompetition">Weed &amp; Competition</option>
-      </select>
-    </div>
-    <div id="scouting-list"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title"><div class="sheet-in" id="sheet-body"></div></dialog>
+<dialog class="sheet" id="scanner" aria-label="Camera scanner">
+  <div class="sheet-in">
+    <h3>Scan a bed QR code</h3>
+    <video id="scan-video" playsinline muted></video>
+    <div class="sheet-actions"><button class="btn" type="button" data-act="scan-stop">Cancel</button></div>
   </div>
-
-  <!-- VIEW 8: TODAY (Manager Work Queue -- ActivityEngine.gs get-daily-queue,
-       Must Do / Attention / Routine, grouped by cohort where the item has one) -->
-  <div id="view-queue" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Today</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadQueue()">Refresh</button>
-    </div>
-    <div id="queue-generated-at" style="font-size:12px; color:#888; margin-bottom:10px;"></div>
-    <div id="queue-summary" class="queue-summary"></div>
-    <div id="queue-body"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
-  <!-- VIEW 4: HARVEST READY VERIFICATION -->
-  <div id="view-harvest-ready" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Harvest Ready</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestCandidates()">Refresh</button>
-    </div>
-    <div class="form-group" style="margin-top:10px;">
-      <label for="hr-scan-input">Scan or Enter Bed QR</label>
-      <input type="text" id="hr-scan-input" placeholder="e.g. BED:B1-17" autocapitalize="off" autocorrect="off" spellcheck="false" onkeypress="if(event.key==='Enter') scanBedForHarvestReady();">
-    </div>
-    <button class="btn-secondary" onclick="scanBedForHarvestReady()">Scan Bed</button>
-    <div id="hr-confirm-slot" style="margin-top:12px;"></div>
-    <div id="harvest-ready-list" style="margin-top:16px;"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
-
-  <!-- VIEW 5: HARVEST COMPLETE CLOSE-OUT -->
-  <div id="view-harvest-complete" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Harvest Complete</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0; background:#455a64;" onclick="loadHarvestableCohorts()">Refresh</button>
-    </div>
-    <div id="harvest-complete-list"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadBoard()">Back to Board</button>
-  </div>
+</dialog>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
-  // This MUST be the WorkerApp project's deployed exec URL (same value as
-  // WEB_APP_URL in WorkerApp.html) -- NOT this ManagerApp project's own exec
-  // URL. This page is hosted by its own separate Apps Script project/
-  // deployment, but every fetch() action below (login, get-manager-board,
-  // reassign-session, etc.) still needs to hit the WorkerApp project's
-  // backend, since that's the project with doPost/routeAction_/the data layer.
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
-
-  const VIEW_IDS = ['view-login', 'view-board', 'view-history', 'view-harvest-ready', 'view-harvest-complete', 'view-activity-log', 'view-scouting', 'view-queue'];
-
-  let state = {
-    managerId: '',
-    managerName: '',
-    role: '',
-    sessions: [],
-    workers: [],
-    history: [],
-    harvestCandidates: [],
-    harvestableCohorts: [],
-    activityLog: [], // completed-session + cohort-state-change feed from FIELD_ACTIVITY_LOG, via get-activity-history
-    scoutFindings: [], // SCOUT_FINDING rows via get-scout-findings -- most-recent feed or one bed's progression
-    queue: null // { generatedAt, counts, mustDo, attention, routine } from get-daily-queue (ActivityEngine.gs)
-  };
-
-  function setConnStatus(status, label) {
-    var dot = document.getElementById('conn-dot');
-    var text = document.getElementById('conn-text');
-    if (!dot || !text) return;
-    dot.className = 'conn-dot ' + status;
-    text.textContent = label;
-  }
-
-  function apiCall(action, payload, callback) {
-    setConnStatus('checking', 'Connecting...');
-    fetch(WEB_APP_URL, {
-      method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: action, payload: payload })
-    })
-      .then(function(response) {
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return response.json();
-      })
-      .then(function(res) {
-        setConnStatus('online', 'Connected');
-        callback(res);
-      })
-      .catch(function(error) {
-        console.error('apiCall failed:', action, error);
-        setConnStatus('offline', 'Connection error');
-        alert('Something went wrong (' + action + '): ' + error.message);
-      });
-  }
-
-  function switchView(viewId) {
-    VIEW_IDS.forEach(v => {
-      var el = document.getElementById(v);
-      if (el) el.classList.add('hidden');
-    });
-    var target = document.getElementById(viewId);
-    if (target) target.classList.remove('hidden');
-  }
-
-  function appLogin() {
-    let workerId = document.getElementById('login-worker-id').value;
-    let pin = document.getElementById('login-pin').value;
-
-    apiCall('login', { workerId: workerId, pin: pin }, function(res) {
-      if (!res || !res.success) {
-        alert('Authentication failed: ' + (res && res.error || 'Invalid credentials'));
-        return;
-      }
-      if (res.user.role !== 'Manager' && res.user.role !== 'Founder') {
-        // Valid login, wrong app -- log them back out immediately so
-        // LOGIN_LOG's login/logout pairing stays intact, and don't proceed.
-        apiCall('logout', { workerId: res.user.workerId }, function() {});
-        alert('This app is for Managers/Founders only.');
-        return;
-      }
-
-      state.managerId = res.user.workerId;
-      state.managerName = res.user.name;
-      state.role = res.user.role;
-
-      document.getElementById('app-header').classList.remove('hidden');
-      document.getElementById('header-user-name').textContent = res.user.name + ' (' + res.user.role + ')';
-      loadWorkers();
-      loadBoard();
-    });
-  }
-
-  function appLogout() {
-    var loggedOutId = state.managerId;
-    if (loggedOutId) {
-      apiCall('logout', { workerId: loggedOutId }, function() {});
-    }
-    state = { managerId: '', managerName: '', role: '', sessions: [], workers: [], history: [], harvestCandidates: [], harvestableCohorts: [], activityLog: [], scoutFindings: [], queue: null };
-    document.getElementById('login-worker-id').value = '';
-    document.getElementById('login-pin').value = '';
-    document.getElementById('app-header').classList.add('hidden');
-    document.getElementById('header-user-name').textContent = '';
-    switchView('view-login');
-  }
-
-  function loadWorkers() {
-    apiCall('list-workers', {}, function(res) {
-      state.workers = (res && res.success && res.workers) ? res.workers : [];
-    });
-  }
-
-  function loadBoard() {
-    apiCall('get-manager-board', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load board');
-        return;
-      }
-      state.sessions = res.sessions;
-      renderBoard();
-      switchView('view-board');
-    });
-  }
-
-  // Reassignment history feed (both in-place Reassign and Close & New both
-  // land here, since both write through REASSIGNMENT_LOG on the backend).
-  function loadHistory() {
-    apiCall('get-reassignment-log', { managerId: state.managerId, limit: 50 }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load history');
-        return;
-      }
-      state.history = res.entries;
-      renderHistory();
-      switchView('view-history');
-    });
-  }
-
-  function renderHistory() {
-    let container = document.getElementById('history-list');
-    container.innerHTML = '';
-
-    if (state.history.length === 0) {
-      container.innerHTML = '<div class="empty-state">No reassignments logged yet.</div>';
-      return;
-    }
-
-    state.history.forEach(function(h) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-      let isCloseNew = h.actionType === 'CLOSE_AND_NEW';
-      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + h.bedId + '</span>' +
-          '<span class="badge ' + (isCloseNew ? 'badge-danger' : 'badge-paused') + '">' + (isCloseNew ? 'CLOSE & NEW' : 'REASSIGN') + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + h.activityLabel + '</div>' +
-        '<div class="sr-meta"><strong>' + h.fromWorkerName + '</strong> &rarr; <strong>' + h.toWorkerName + '</strong></div>' +
-        (h.reason ? '<div class="sr-meta">Reason: ' + h.reason + '</div>' : '') +
-        '<div class="sr-meta">By ' + h.reassignedByName + ' &middot; ' + when + '</div>';
-
-      container.appendChild(row);
-    });
-  }
-
-  // Completed-activity feed across ALL workers -- get-activity-history is
-  // called with managerId (validated server-side via isManagerRole_), so it
-  // returns every worker's FIELD_ACTIVITY_LOG rows rather than just one
-  // worker's own. This is where a completed session (or a cohort state
-  // change from Harvest Ready / Harvest Complete verification) actually
-  // shows up once it drops off the live board.
-  function loadActivityLog() {
-    apiCall('get-activity-history', { managerId: state.managerId, limit: 75 }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load activity log');
-        return;
-      }
-      state.activityLog = res.entries;
-      renderActivityLog();
-      switchView('view-activity-log');
-    });
-  }
-
-  function renderActivityLog() {
-    let container = document.getElementById('activity-log-list');
-    container.innerHTML = '';
-
-    if (state.activityLog.length === 0) {
-      container.innerHTML = '<div class="empty-state">No completed activity logged yet.</div>';
-      return;
-    }
-
-    state.activityLog.forEach(function(h) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
-
-      let bodyHtml;
-      if (h.isStateChange) {
-        bodyHtml = '<div class="sr-meta">' + h.fromState + ' &rarr; ' + h.toState + ' &middot; by ' + (h.verifiedBy || '-') + '</div>';
-      } else {
-        let qtyNote = h.quantity ? (' &middot; ' + h.quantity + (h.unit ? ' ' + h.unit : '')) : '';
-        bodyHtml = '<div class="sr-meta">' + h.workerName + ' &middot; ' +
-          (h.elapsedMinutes !== null ? h.elapsedMinutes + ' min active' : '') + qtyNote + '</div>';
-        if (h.exceptionFlag) {
-          bodyHtml += '<div class="sr-exception">&#9888; ' + h.exceptionType + '</div>';
-        }
-      }
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + (h.bedId || h.cohortId || '-') + '</span>' +
-          '<span class="badge">' + h.activityLabel + '</span>' +
-        '</div>' +
-        bodyHtml +
-        '<div class="sr-meta">' + when + '</div>';
-
-      container.appendChild(row);
-    });
-  }
-
-  // Entry point from the board's Scouting button -- clears any prior
-  // bed/domain filter so it always opens on the most-recent-across-all-beds
-  // feed, then loads.
-  function loadScoutFindings() {
-    document.getElementById('scout-bed-filter').value = '';
-    document.getElementById('scout-domain-filter').value = '';
-    refreshScoutFindings();
-  }
-
-  // Re-fetches using whatever's currently in the bed/domain filter fields --
-  // called on Refresh, Enter in the bed field, and on domain dropdown
-  // change, so the list always reflects what's on screen. An empty bed
-  // field means "most recent across all beds" (get-scout-findings with no
-  // bedId), matching how Harvest Ready/Complete leave their scan fields
-  // blank between scans rather than needing a separate "clear" action.
-  function refreshScoutFindings() {
-    let bedId = document.getElementById('scout-bed-filter').value.trim();
-    let domain = document.getElementById('scout-domain-filter').value;
-    let payload = domain ? { domain: domain } : {};
-    if (bedId) payload.bedId = bedId;
-
-    apiCall('get-scout-findings', payload, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load scouting findings');
-        return;
-      }
-      state.scoutFindings = res.findings;
-      renderScoutFindings();
-      switchView('view-scouting');
-    });
-  }
-
-  var SEVERITY_BADGE_CLASS_ = { LOW: 'badge-sev-low', MEDIUM: 'badge-sev-medium', HIGH: 'badge-sev-high', CRITICAL: 'badge-sev-critical' };
-
-  function renderScoutFindings() {
-    let container = document.getElementById('scouting-list');
-    container.innerHTML = '';
-
-    if (state.scoutFindings.length === 0) {
-      container.innerHTML = '<div class="empty-state">No scouting findings logged yet.</div>';
-      return;
-    }
-
-    state.scoutFindings.forEach(function(f) {
-      let row = document.createElement('div');
-      row.className = 'session-row' + (f.exceptionResolved ? ' finding-resolved' : '');
-
-      let sevClass = 'badge ' + (SEVERITY_BADGE_CLASS_[f.severity] || 'badge-sev-low');
-      let when = f.timestamp ? new Date(f.timestamp).toLocaleString() : '';
-
-      let actionHtml = '';
-      if (f.requiresAction) {
-        actionHtml = f.exceptionResolved
-          ? '<div class="sr-meta">&#10003; Exception resolved</div>'
-          : '<div class="sr-exception">&#9888; Open exception (' + f.exceptionId + ')</div>';
-      }
-      let photoHtml = f.photoUrl
-        ? '<div class="sr-meta"><a href="' + f.photoUrl + '" target="_blank">View photo</a></div>'
-        : '';
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + f.bedId + '</span>' +
-          '<span class="' + sevClass + '">' + f.severity + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + f.domainLabel + ' &middot; ' + f.symptom + '</div>' +
-        '<div class="sr-meta">' + f.workerName + ' &middot; ' + when + (f.locationDetail ? (' &middot; ' + f.locationDetail) : '') + '</div>' +
-        (f.notes ? '<div class="sr-meta">' + f.notes + '</div>' : '') +
-        actionHtml +
-        photoHtml;
-
-      container.appendChild(row);
-    });
-  }
-
-  // ---------------------------------------------------------------------
-  // TODAY (Manager Work Queue) -- get-daily-queue (ActivityEngine.gs
-  // getDailyManagerQueue_). Pure calculated view: nothing here writes
-  // anything, matching the backend's own contract. Items with a cohortId
-  // are grouped into one card per cohort so a manager reads "TOM-014 --
-  // Bed B07: Irrigation due, Scouting due" instead of four separate rows
-  // for the same plant. Items with no cohortId (open-ended exceptions tied
-  // only to a bed, pack-shed/dispatch pipeline items) render as their own
-  // single-item card since there's nothing to group them under.
-  // ---------------------------------------------------------------------
-  var QUEUE_BUCKETS_ = [
-    { key: 'mustDo', domId: 'mustDo', label: 'Must Do', dotColor: '#c62828' },
-    { key: 'attention', domId: 'attention', label: 'Attention', dotColor: '#ef6c00' },
-    { key: 'routine', domId: 'routine', label: 'Routine', dotColor: '#546e7a' }
-  ];
-
-  function loadQueue() {
-    apiCall('get-daily-queue', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load queue');
-        return;
-      }
-      state.queue = res.queue;
-      renderQueue();
-      switchView('view-queue');
-    });
-  }
-
-  // Groups a bucket's flat item list into { cohortId: [items] } plus a
-  // separate ungrouped[] array for items with no cohortId, preserving
-  // first-seen order for both cohort groups and ungrouped items.
-  function groupQueueItems_(items) {
-    var groupsByCohort_ = {};
-    var cohortOrder = [];
-    var ungrouped = [];
-
-    items.forEach(function(item) {
-      if (!item.cohortId) {
-        ungrouped.push(item);
-        return;
-      }
-      if (!groupsByCohort_[item.cohortId]) {
-        groupsByCohort_[item.cohortId] = [];
-        cohortOrder.push(item.cohortId);
-      }
-      groupsByCohort_[item.cohortId].push(item);
-    });
-
-    return {
-      cohortOrder: cohortOrder,
-      groupsByCohort: groupsByCohort_,
-      ungrouped: ungrouped
-    };
-  }
-
-  function queueItemHtml_(item) {
-    return '<div class="queue-item">' +
-      '<span class="qi-category">' + (item.category || '') + '</span>' +
-      '<span class="qi-title">' + item.title + '</span>' +
-      (item.detail ? '<div class="qi-detail">' + item.detail + '</div>' : '') +
-      '</div>';
-  }
-
-  // One card per cohort: header line is Crop -- Bed (Cohort_ID), followed
-  // by every queue item for that cohort. Location is whichever of
-  // blockId/bedId the item actually carries -- the backend's item shapes
-  // aren't consistent about which field they use (cohort-driven items use
-  // blockId, exception/pipeline items use bedId), so both are checked.
-  function queueGroupHtml_(cohortId, items) {
-    var first = items[0];
-    var location = first.blockId || first.bedId || '';
-    var titleParts = [];
-    if (first.cropId) titleParts.push(first.cropId);
-    titleParts.push(location ? ('Bed ' + location) : cohortId);
-
-    return '<div class="queue-group">' +
-      '<div class="queue-group-head">' +
-        '<span class="qg-title">' + titleParts.join(' &middot; ') + '</span>' +
-        '<span class="qg-sub">' + cohortId + '</span>' +
-      '</div>' +
-      items.map(queueItemHtml_).join('') +
-      '</div>';
-  }
-
-  function queueUngroupedHtml_(item) {
-    var location = item.blockId || item.bedId || '';
-    return '<div class="queue-group">' +
-      (location ? '<div class="queue-group-head"><span class="qg-title">Bed ' + location + '</span></div>' : '') +
-      queueItemHtml_(item) +
-      '</div>';
-  }
-
-  function toggleQueueSection_(domId) {
-    var section = document.getElementById('queue-section-' + domId);
-    if (section) section.classList.toggle('collapsed');
-  }
-
-  function renderQueue() {
-    var q = state.queue;
-    var genAt = document.getElementById('queue-generated-at');
-    genAt.textContent = q.generatedAt ? ('As of ' + new Date(q.generatedAt).toLocaleString()) : '';
-
-    var summary = document.getElementById('queue-summary');
-    summary.innerHTML =
-      '<div class="qs-pill qs-mustdo"><span class="qs-count">' + q.counts.mustDo + '</span><span class="qs-label">Must Do</span></div>' +
-      '<div class="qs-pill qs-attention"><span class="qs-count">' + q.counts.attention + '</span><span class="qs-label">Attention</span></div>' +
-      '<div class="qs-pill qs-routine"><span class="qs-count">' + q.counts.routine + '</span><span class="qs-label">Routine</span></div>';
-
-    var body = document.getElementById('queue-body');
-    body.innerHTML = '';
-
-    QUEUE_BUCKETS_.forEach(function(bucketDef) {
-      var items = q[bucketDef.key] || [];
-      var grouped = groupQueueItems_(items);
-
-      var groupsHtml = grouped.cohortOrder
-        .map(function(cid) { return queueGroupHtml_(cid, grouped.groupsByCohort[cid]); })
-        .join('') +
-        grouped.ungrouped.map(queueUngroupedHtml_).join('');
-
-      var section = document.createElement('div');
-      section.className = 'queue-section' + (bucketDef.key === 'routine' ? ' collapsed' : '');
-      section.id = 'queue-section-' + bucketDef.domId;
-      section.innerHTML =
-        '<div class="queue-section-header" onclick="toggleQueueSection_(\'' + bucketDef.domId + '\')">' +
-          '<span class="qsh-dot" style="background:' + bucketDef.dotColor + ';"></span>' +
-          '<h3>' + bucketDef.label + ' <span class="qsh-count">(' + items.length + ')</span></h3>' +
-          '<span class="qsh-caret">&#9660;</span>' +
-        '</div>' +
-        '<div class="queue-group-list">' +
-        (items.length === 0
-          ? '<div class="empty-state">Nothing here.</div>'
-          : groupsHtml) +
-        '</div>';
-      body.appendChild(section);
-    });
-  }
-
-  // FIELD_STATE_SEQUENCE can advance them to Harvestable.
-  function loadHarvestCandidates() {
-    apiCall('get-harvest-candidates', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load harvest candidates');
-        return;
-      }
-      state.harvestCandidates = res.candidates;
-      renderHarvestCandidates();
-      switchView('view-harvest-ready');
-    });
-  }
-
-  function renderHarvestCandidates() {
-    let container = document.getElementById('harvest-ready-list');
-    container.innerHTML = '';
-
-    if (state.harvestCandidates.length === 0) {
-      container.innerHTML = '<div class="empty-state">No cohorts currently in Growing state.</div>';
-      return;
-    }
-
-    state.harvestCandidates.forEach(function(c) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + c.cohortId + '</span>' +
-          '<span class="badge">' + c.blockId + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + c.cropName + (c.variety ? ' (' + c.variety + ')' : '') + ' &middot; Beds ' + c.bedRange + '</div>' +
-        (c.targetQtyLbs !== null ? '<div class="sr-meta">Target: ' + c.targetQtyLbs + ' lbs' + (c.targetHarvestDate ? ' by ' + c.targetHarvestDate : '') + '</div>' : '') +
-        harvestLockoutNoteHtml(c.lockout) +
-        '<div class="sr-actions"><button class="hr-btn-verify">Verify Harvest Ready</button></div>';
-
-      row.querySelector('.hr-btn-verify').onclick = function() { openHarvestReadyConfirm(c, null); };
-      container.appendChild(row);
-    });
-  }
-
-  // Curing lockout is now a computed status (see getOnionLockoutStatus_ in
-  // Database.gs) -- {applicable:false} for non-curing crops (renders
-  // nothing), or a real satisfied/not-satisfied verdict with elapsed days
-  // for Onions, instead of just "is the valve locked right now."
-  function harvestLockoutNoteHtml(lockout) {
-    if (!lockout || !lockout.applicable) return '';
-    let style = lockout.satisfied ? '' : ' style="color:#c62828;"';
-    return '<div class="sr-meta"' + style + '>' + lockout.message + '</div>';
-  }
-
-  // Bed-QR-driven entry point onto the Harvest Ready confirmation panel --
-  // scans/resolves a bed straight to its cohort candidate via
-  // scan-bed-harvest-ready, rather than only being reachable by picking a
-  // cohort off the Growing-state list below.
-  function scanBedForHarvestReady() {
-    let raw = document.getElementById('hr-scan-input').value.trim().toUpperCase();
-    if (!raw) return alert('Enter or scan a bed QR code.');
-
-    apiCall('scan-bed-harvest-ready', { bedId: raw, managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Scan failed.');
-        return;
-      }
-      document.getElementById('hr-scan-input').value = '';
-      openHarvestReadyConfirm(res.candidate, res.bedId);
-    });
-  }
-
-  // Opens the scouting-checklist + curing-lockout confirmation panel for
-  // one candidate -- fed either by a list row click or by
-  // scanBedForHarvestReady() above. Replaces the old single confirm()
-  // dialog: every scouting criterion must be checked, and a lockout
-  // override (if needed) requires an explicit reason.
-  function openHarvestReadyConfirm(candidate, scannedBedId) {
-    let slot = document.getElementById('hr-confirm-slot');
-    let lockout = candidate.lockout || { applicable: false };
-
-    let overrideHtml = '';
-    if (lockout.applicable && !lockout.satisfied) {
-      overrideHtml =
-        '<div class="sr-meta" style="color:#c62828; margin-top:10px;">' + lockout.message + '</div>' +
-        '<label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin-top:8px;">' +
-          '<input type="checkbox" id="hr-override-check" style="width:auto;"> Override and verify anyway' +
-        '</label>' +
-        '<div class="form-group"><label>Override Reason (required to override)</label><input type="text" id="hr-override-reason" placeholder="Why proceed despite the lockout?"></div>';
-    } else if (lockout.applicable) {
-      overrideHtml = '<div class="sr-meta" style="margin-top:10px;">' + lockout.message + '</div>';
-    }
-
-    slot.innerHTML =
-      '<div class="panel">' +
-        '<h4>Confirm Harvest Ready &mdash; ' + candidate.cohortId + (scannedBedId ? ' (scanned bed ' + scannedBedId + ')' : '') + '</h4>' +
-        '<div class="sr-meta">' + candidate.cropName + (candidate.variety ? ' (' + candidate.variety + ')' : '') + ' &middot; Beds ' + candidate.bedRange + '</div>' +
-        '<div class="form-group" style="margin-top:10px;">' +
-          '<label>Scouting Checklist &mdash; confirm all before verifying</label>' +
-          harvestChecklistItemHtml('hr-chk-size', 'Correct size') +
-          harvestChecklistItemHtml('hr-chk-color', 'Correct color') +
-          harvestChecklistItemHtml('hr-chk-pest', 'No major pest/disease issues') +
-          harvestChecklistItemHtml('hr-chk-water', 'No water stress') +
-        '</div>' +
-        '<div class="form-group"><label>Scouting Notes (optional)</label><input type="text" id="hr-scout-notes" placeholder="Anything worth recording..."></div>' +
-        overrideHtml +
-        '<button class="hr-btn-confirm">Confirm Verify Harvest Ready</button>' +
-        '<button class="btn-secondary" style="margin-top:6px;">Cancel</button>' +
-      '</div>';
-
-    slot.querySelector('.hr-btn-confirm').onclick = function() { confirmHarvestReady(candidate.cohortId, lockout); };
-    slot.querySelector('.btn-secondary').onclick = function() { slot.innerHTML = ''; };
-  }
-
-  function harvestChecklistItemHtml(id, label) {
-    return '<label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin-bottom:6px;">' +
-      '<input type="checkbox" id="' + id + '" style="width:auto;"> ' + label +
-    '</label>';
-  }
-
-  function confirmHarvestReady(cohortId, lockout) {
-    let scouting = {
-      sizeOk: document.getElementById('hr-chk-size').checked,
-      colorOk: document.getElementById('hr-chk-color').checked,
-      pestDiseaseOk: document.getElementById('hr-chk-pest').checked,
-      noWaterStressOk: document.getElementById('hr-chk-water').checked
-    };
-    let scoutingNotes = document.getElementById('hr-scout-notes').value;
-
-    let payload = { cohortId: cohortId, managerId: state.managerId, scouting: scouting, scoutingNotes: scoutingNotes };
-
-    if (lockout && lockout.applicable && !lockout.satisfied) {
-      let overrideEl = document.getElementById('hr-override-check');
-      let reasonEl = document.getElementById('hr-override-reason');
-      if (overrideEl && overrideEl.checked) {
-        payload.overrideLockout = true;
-        payload.overrideReason = reasonEl ? reasonEl.value : '';
-      }
-    }
-
-    apiCall('verify-harvest-ready', payload, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to verify harvest-ready');
-        return;
-      }
-      document.getElementById('hr-confirm-slot').innerHTML = '';
-      loadHarvestCandidates();
-    });
-  }
-
-  // Cohorts currently in Harvestable state, with yield-to-date summed from
-  // FIELD_ACTIVITY_LOG, awaiting manager close-out.
-  function loadHarvestableCohorts() {
-    apiCall('get-harvestable-cohorts', { managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load harvestable cohorts');
-        return;
-      }
-      state.harvestableCohorts = res.candidates;
-      renderHarvestableCohorts();
-      switchView('view-harvest-complete');
-    });
-  }
-
-  function renderHarvestableCohorts() {
-    let container = document.getElementById('harvest-complete-list');
-    container.innerHTML = '';
-
-    if (state.harvestableCohorts.length === 0) {
-      container.innerHTML = '<div class="empty-state">No cohorts currently in Harvestable state.</div>';
-      return;
-    }
-
-    state.harvestableCohorts.forEach(function(c) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-
-      let pctNote = '';
-      if (c.targetQtyLbs) {
-        let pct = Math.round((c.actualQtyLbsToDate / c.targetQtyLbs) * 100);
-        pctNote = '<div class="sr-meta">' + c.actualQtyLbsToDate + ' / ' + c.targetQtyLbs + ' ' + c.yieldUnit + ' logged (' + pct + '%)</div>';
-      } else {
-        pctNote = '<div class="sr-meta">' + c.actualQtyLbsToDate + ' ' + c.yieldUnit + ' logged</div>';
-      }
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + c.cohortId + '</span>' +
-          '<span class="badge">' + c.blockId + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + c.cropName + (c.variety ? ' (' + c.variety + ')' : '') + ' &middot; Beds ' + c.bedRange + '</div>' +
-        pctNote +
-        '<div class="sr-meta">' + c.harvestSessionCount + ' harvest session' + (c.harvestSessionCount === 1 ? '' : 's') + ' logged so far</div>' +
-        '<div class="sr-actions"><button class="hc-btn-verify">Verify Harvest Complete</button></div>';
-
-      row.querySelector('.hc-btn-verify').onclick = function() { verifyHarvestComplete(c.cohortId); };
-      container.appendChild(row);
-    });
-  }
-
-  function verifyHarvestComplete(cohortId) {
-    if (!confirm('Verify ' + cohortId + ' as harvest-complete? This moves it to Harvested and opens its beds for cleanup.')) return;
-    apiCall('verify-harvest-complete', { cohortId: cohortId, managerId: state.managerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to verify harvest-complete');
-        return;
-      }
-      if (res.bedsMissing && res.bedsMissing.length > 0) {
-        alert('Cohort closed out, but these beds in its Bed_Range had no matching BED_MASTER row and were not updated: ' + res.bedsMissing.join(', '));
-      }
-      loadHarvestableCohorts();
-    });
-  }
-
-  var PAUSE_TYPE_LABELS = { BREAK: 'Break', LUNCH: 'Lunch', END_OF_DAY: 'End of Day' };
-  function pauseTypeLabel(pauseType) {
-    return PAUSE_TYPE_LABELS[pauseType] || pauseType;
-  }
-  function pauseTypeBadgeClass(pauseType) {
-    // Distinct color per type so a manager can scan the board at a glance:
-    // BREAK/LUNCH read as "coming back", END_OF_DAY reads as "done".
-    if (pauseType === 'END_OF_DAY') return 'badge badge-pausetype-eod';
-    if (pauseType === 'LUNCH') return 'badge badge-pausetype-lunch';
-    return 'badge badge-pausetype-break';
-  }
-
-  function workerOptionsHtml(excludeWorkerId) {
-    return state.workers
-      .filter(function(w) { return w.workerId !== excludeWorkerId; })
-      .map(function(w) { return '<option value="' + w.workerId + '">' + w.name + ' (' + w.workerId + ')</option>'; })
-      .join('');
-  }
-
-  function renderBoard() {
-    let subtitle = document.getElementById('board-subtitle');
-    if (subtitle) subtitle.textContent = state.managerName ? ('Logged in as ' + state.managerName + ' (' + state.role + ')') : '';
-
-    let container = document.getElementById('board-list');
-    container.innerHTML = '';
-
-    if (state.sessions.length === 0) {
-      container.innerHTML = '<div class="empty-state">No open sessions right now.</div>';
-      return;
-    }
-
-    state.sessions.forEach(function(s) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-
-      let badgeClass = s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active';
-      let exceptionHtml = s.exceptionFlag
-        ? '<div class="sr-exception">&#9888; Exception: ' + (s.exceptionType || 'Flagged') + '</div>'
-        : '';
-      let pauseTypeHtml = (s.status === 'PAUSED' && s.pauseType)
-        ? '<span class="' + pauseTypeBadgeClass(s.pauseType) + '">' + pauseTypeLabel(s.pauseType) + '</span>'
-        : '';
-      let reassignedHtml = s.reassigned
-        ? '<div class="sr-reassigned">&#8635; Reassigned from ' + s.reassignedFromName + (s.reassignedByName ? ' by ' + s.reassignedByName : '') + '</div>'
-        : '';
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + s.bedId + '</span>' +
-          '<span style="display:flex; gap:6px; align-items:center;"><span class="' + badgeClass + '">' + s.status + '</span>' + pauseTypeHtml + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + s.activityLabel + ' &middot; ' + s.workerName + ' &middot; ' + s.elapsedMinutes + ' min active</div>' +
-        reassignedHtml +
-        exceptionHtml +
-        '<div class="sr-actions">' +
-          (s.status === 'PAUSED' ? '<button class="sr-btn-resume">Resume</button>' : '') +
-          '<button class="sr-btn-complete btn-secondary">Complete</button>' +
-          '<button class="sr-btn-reassign btn-warn">Reassign</button>' +
-          '<button class="sr-btn-close-new btn-danger">Close &amp; New</button>' +
-        '</div>' +
-        '<div class="sr-panel-slot"></div>';
-
-      let resumeBtn = row.querySelector('.sr-btn-resume');
-      if (resumeBtn) resumeBtn.onclick = function() { managerResume(s); };
-      row.querySelector('.sr-btn-complete').onclick = function() { managerComplete(s); };
-      row.querySelector('.sr-btn-reassign').onclick = function() { togglePanel(row, s, 'reassign'); };
-      row.querySelector('.sr-btn-close-new').onclick = function() { togglePanel(row, s, 'close-new'); };
-
-      container.appendChild(row);
-    });
-  }
-
-  function managerResume(s) {
-    apiCall('resume-session', { sessionId: s.sessionId }, function(res) {
-      if (res && res.success) loadBoard();
-    });
-  }
-
-  function managerComplete(s) {
-    let quantity = 0;
-    if (s.activity === 'Harvest') {
-      quantity = prompt('Enter harvested quantity (lbs/crates) for ' + s.bedId + ':', '0');
-      if (quantity === null) return;
-    }
-    apiCall('complete-session', { sessionId: s.sessionId, quantity: quantity }, function(res) {
-      if (res && res.success) loadBoard();
-    });
-  }
-
-  // Toggles an inline action panel (Reassign or Close & New) beneath a row.
-  function togglePanel(row, s, kind) {
-    let slot = row.querySelector('.sr-panel-slot');
-    let existing = slot.querySelector('.panel');
-    if (existing) { slot.innerHTML = ''; return; }
-
-    if (kind === 'reassign') {
-      slot.innerHTML =
-        '<div class="panel">' +
-          '<h4>Reassign ' + s.bedId + ' (' + s.activityLabel + ') from ' + s.workerName + '</h4>' +
-          '<div class="form-group"><label>New Worker</label><select class="panel-worker">' + workerOptionsHtml(s.workerId) + '</select></div>' +
-          '<div class="form-group"><label>Reason (optional)</label><input type="text" class="panel-reason" placeholder="Why is this being reassigned?"></div>' +
-          '<button class="panel-confirm btn-warn">Confirm Reassign</button>' +
-        '</div>';
-      slot.querySelector('.panel-confirm').onclick = function() {
-        let toWorkerId = slot.querySelector('.panel-worker').value;
-        let reason = slot.querySelector('.panel-reason').value;
-        if (!toWorkerId) return alert('No worker selected.');
-        apiCall('reassign-session', { sessionId: s.sessionId, toWorkerId: toWorkerId, managerId: state.managerId, reason: reason }, function(res) {
-          if (res && res.success) { loadBoard(); }
-          else alert(res && res.error ? res.error : 'Reassign failed');
-        });
-      };
+'use strict';
+/* ==========================================================================
+   CONFIG
+   ========================================================================== */
+// URL of the deployed WorkerApp web app (Apps Script "/exec" URL). Leave empty to run in demo mode.
+const WEB_APP_URL = '';
+const REQUEST_TIMEOUT_MS = 20000;
+const BOARD_REFRESH_MS = 30000;
+
+// Read actions are the ones named in the ManagerApp spec. The write actions are implied by the spec but their
+// names are not given, so they are listed here in one place: rename them to match your backend.
+const ACTIONS = {
+  login: 'login', logout: 'logout',
+  listWorkers: 'list-workers',
+  board: 'get-manager-board',
+  reassignmentLog: 'get-reassignment-log',
+  activityHistory: 'get-activity-history',
+  scoutFindings: 'get-scout-findings',
+  dailyQueue: 'get-daily-queue',
+  harvestCandidates: 'get-harvest-candidates',
+  harvestableCohorts: 'get-harvestable-cohorts',
+  // write actions (names assumed)
+  reassignSession: 'reassign-session',
+  closeAndNew: 'close-and-new-session',
+  verifyHarvestReady: 'verify-harvest-ready',
+  verifyHarvestComplete: 'verify-harvest-complete'
+};
+/* BACKEND CONTRACT (what this app sends and reads; field names are matched loosely, so findingId, Finding_ID and
+   finding_id all work). Every request is POST text/plain JSON: {action, ...payload, managerId}. Every reply is
+   {ok:true, data:<below>} or a bare payload; failures are {ok:false, error:"message", code:"..."}.
+   Identity: login returns a session token. Every later request carries it as "token", and the backend takes the
+   manager's identity from that session (the managerId sent along is informational only and must be ignored).
+   Codes: UNAUTHENTICATED or ROLE_NOT_ALLOWED on a later call ends the session and returns to login; FORBIDDEN shows
+   the message; on login, AUTH_FAILED / LOCKED / INACTIVE / ROLE_NOT_ALLOWED show the message on the sign-in form.
+
+   login {workerId, pin, app:"ManagerApp", device} -> {workerId, name, role, token, expiresAt}   (role must be Manager or Founder)
+   logout {workerId, token, device}      -> anything
+   list-workers                          -> {workers:[{workerId, name, role}]}
+   get-manager-board                     -> {sessions:[{sessionId, workerId, workerName, taskType, bedId, cohortId, cropName, startTime}]}
+   get-reassignment-log                  -> {log:[{timestamp, fromWorkerId|fromWorkerName, toWorkerId|toWorkerName, mode, bedId, cohortId, taskType, managerName, note}]}
+                                            (mode containing "close" is shown as "Closed and started new")
+   get-activity-history                  -> {activities:[{type:"session"|"cohort-state", workerId, taskType, bedId, cohortId, startTime, endTime,
+                                            durationMinutes, notes, fromState, toState, timestamp}]}
+   get-scout-findings                    -> {findings:[SCOUT_FINDING columns: findingId, bedId, cohortId, domain, symptom, severity, requiresAction,
+                                            notes, photoUrl, worker, timestamp, exceptionId, resolvedStatus]}
+   get-daily-queue                       -> {generatedAt, counts:{mustDo,attention,routine}, mustDo:[], attention:[], routine:[]}
+                                            item: {cohortId, cropName, bedId, title, detail, taskType, dueTime, assignedTo}
+   get-harvest-candidates                -> {candidates:[{cohortId, bedId, qrCode, cropName, harvestReadyDate, fieldState, blockId}]}
+   get-harvestable-cohorts               -> {cohorts:[{cohortId, cropName, beds, lastHarvestTime, totalWeight, fieldState}]}
+   reassign-session / close-and-new-session {sessionId, fromWorkerId, toWorkerId, bedId, cohortId, taskType, note}   (assumed names)
+   verify-harvest-ready {cohortId, bedId}   verify-harvest-complete {cohortId}                                       (assumed names)
+*/
+const ALLOWED_ROLES = ['manager', 'founder'];
+const APP_NAME = 'ManagerApp';   // sent at login so the backend applies this app's role gate
+const IS_DEMO = !WEB_APP_URL;
+const deviceLabel = () => String(navigator.userAgent || 'unknown device').slice(0, 120);
+
+/* ==========================================================================
+   STATE
+   ========================================================================== */
+const state = {
+  managerId: null, managerName: null, role: null, token: null,
+  sessions: [], workers: [], history: [],
+  harvestCandidates: [], harvestableCohorts: [],
+  activityLog: [], scoutFindings: [],
+  queue: { generatedAt: null, counts: {}, mustDo: [], attention: [], routine: [] }
+};
+const ui = { view: 'view-login', activityType: 'all', loaded: {} };
+
+/* ==========================================================================
+   SMALL HELPERS
+   ========================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nk = k => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+const _cache = new WeakMap();
+/* tolerant field lookup: matches Finding_ID, findingId, finding_id ... */
+function g(o, ...names) {
+  if (!o || typeof o !== 'object') return undefined;
+  let m = _cache.get(o);
+  if (!m) { m = {}; Object.keys(o).forEach(k => { m[nk(k)] = o[k]; }); _cache.set(o, m); }
+  for (const n of names) { const v = m[nk(n)]; if (v !== undefined && v !== null && v !== '') return v; }
+  return undefined;
+}
+const listOf = (res, ...keys) => {
+  if (Array.isArray(res)) return res;
+  for (const k of keys) if (res && Array.isArray(res[k])) return res[k];
+  return [];
+};
+const safeUrl = u => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
+const truthy = v => v === true || ['true', 'yes', 'y', '1'].includes(String(v).trim().toLowerCase());
+const titleCase = s => String(s || '').toLowerCase().replace(/(^|[\s_-])([a-z])/g, (m, a, b) => (a === '_' ? ' ' : a) + b.toUpperCase());
+function toDate(v) {
+  if (v == null || v === '') return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtDateTime(v) {
+  const d = toDate(v); if (!d) return '';
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function fmtTime(v) { const d = toDate(v); return d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''; }
+function fmtDate(v) { const d = toDate(v); return d ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+function elapsedText(v) {
+  const d = toDate(v); if (!d) return '';
+  const mins = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+function durationText(mins) {
+  mins = Number(mins); if (!isFinite(mins) || mins < 0) return '';
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+const sevClass = s => ({ critical: 'crit', high: 'high', medium: 'med', low: 'low' }[String(s || '').toLowerCase()] || 'neutral');
+const sevRank = s => ({ critical: 0, high: 1, medium: 2, low: 3 }[String(s || '').toLowerCase()] ?? 4);
+const empty = (title, text) => `<div class="empty"><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
+const skeleton = n => Array.from({ length: n || 3 }, () => '<div class="skeleton"></div>').join('');
+const errBox = (msg, view) => `<div class="errbox" role="alert"><h3>Could not load this list</h3><p>${esc(msg)}</p><button class="btn" data-act="retry" data-view="${esc(view)}" type="button">Try again</button></div>`;
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3600);
+}
+
+/* ==========================================================================
+   CONNECTION STATUS
+   ========================================================================== */
+function setConn(s) {
+  const el = $('#conn'); el.dataset.s = s;
+  $('#conn-text').textContent = { online: IS_DEMO ? 'Demo data' : 'Connected', offline: 'Offline', error: 'Server not reachable', idle: 'Not connected' }[s] || s;
+}
+window.addEventListener('offline', () => setConn('offline'));
+window.addEventListener('online', () => { if (state.managerId) setConn('online'); });
+
+/* ==========================================================================
+   API
+   ========================================================================== */
+function apiError(message, code) { const e = new Error(message); e.code = code; e.isApiError = true; return e; }
+
+/* POST {action, ...payload} as text/plain (a "simple" request, so an Apps Script web app answers without a CORS preflight).
+   Expected reply: {ok:true, data:...} or a bare payload. Failures: {ok:false, error:"..."} or {success:false, ...}. */
+async function apiCall(action, payload = {}) {
+  const body = Object.assign({}, payload);
+  if (state.token && body.token === undefined) body.token = state.token;
+  if (state.managerId && body.managerId === undefined) body.managerId = state.managerId;   // informational; the backend uses the session
+  let json;
+  try {
+    if (IS_DEMO) {
+      json = await mockBackend(action, body);
     } else {
-      let qtyField = s.activity === 'Harvest'
-        ? '<div class="form-group"><label>Logged Quantity (closing old session)</label><input type="text" class="panel-qty" placeholder="0"></div>'
-        : '';
-      slot.innerHTML =
-        '<div class="panel">' +
-          '<h4>Close ' + s.bedId + ' (' + s.activityLabel + ') &amp; start fresh for a new worker</h4>' +
-          qtyField +
-          '<div class="form-group"><label>New Worker</label><select class="panel-worker">' + workerOptionsHtml(s.workerId) + '</select></div>' +
-          '<div class="form-group"><label>Reason (optional)</label><input type="text" class="panel-reason" placeholder="Why close and reassign instead of resuming?"></div>' +
-          '<button class="panel-confirm btn-danger">Confirm Close &amp; New</button>' +
-        '</div>';
-      slot.querySelector('.panel-confirm').onclick = function() {
-        let toWorkerId = slot.querySelector('.panel-worker').value;
-        let reason = slot.querySelector('.panel-reason').value;
-        let qtyEl = slot.querySelector('.panel-qty');
-        let quantity = qtyEl ? qtyEl.value : 0;
-        if (!toWorkerId) return alert('No worker selected.');
-        apiCall('close-and-create-session', { sessionId: s.sessionId, toWorkerId: toWorkerId, managerId: state.managerId, reason: reason, quantity: quantity }, function(res) {
-          if (res && res.success) { loadBoard(); }
-          else alert(res && res.error ? res.error : 'Close & New failed');
-        });
-      };
+      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+      let resp;
+      try {
+        resp = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(Object.assign({ action }, body)), redirect: 'follow', signal: ctrl.signal });
+      } finally { clearTimeout(timer); }
+      if (!resp.ok) throw apiError('The server answered with status ' + resp.status + '.', 'HTTP');
+      const text = await resp.text();
+      try { json = JSON.parse(text); } catch (e) { throw apiError('The server sent a reply this app cannot read.', 'PARSE'); }
     }
+  } catch (err) {
+    setConn(navigator.onLine === false ? 'offline' : 'error');
+    if (err && err.name === 'AbortError') throw apiError('The request timed out. Check your signal and try again.', 'TIMEOUT');
+    if (err && err.isApiError) throw err;
+    throw apiError('Could not reach the server. Check your signal and try again.', 'NETWORK');
   }
+  setConn('online');
+  if (json && (json.ok === false || json.success === false || (json.error && json.ok !== true))) {
+    const e = apiError(json.error || json.message || 'The request failed.', json.code || 'API');
+    if (state.managerId && (['UNAUTHENTICATED', 'ROLE_NOT_ALLOWED'].includes(String(json.code)) || /unauthori[sz]ed|session (expired|ended)/i.test(e.message))) forceLogout(e.message || 'Your session ended. Sign in again.');
+    throw e;
+  }
+  return (json && json.data !== undefined) ? json.data : json;
+}
+
+/* ==========================================================================
+   AUTH
+   ========================================================================== */
+function clearState() {
+  Object.assign(state, { managerId: null, managerName: null, role: null, token: null, sessions: [], workers: [], history: [],
+    harvestCandidates: [], harvestableCohorts: [], activityLog: [], scoutFindings: [],
+    queue: { generatedAt: null, counts: {}, mustDo: [], attention: [], routine: [] } });
+  ui.loaded = {}; ui.activityType = 'all';
+  renderHeader();
+}
+
+async function login(workerId, pin) {
+  const res = await apiCall(ACTIONS.login, { workerId, pin, app: APP_NAME, device: deviceLabel() });
+  const role = String(g(res, 'role', 'userRole') || '').trim();
+  const id = g(res, 'workerId', 'userId', 'id') || workerId;
+  const token = g(res, 'token', 'sessionToken');
+  if (!token) throw apiError('The server signed you in but did not issue a session token. Ask an admin to update the backend.', 'NO_TOKEN');
+  state.token = String(token);                     // held in memory only (never written to storage)
+  if (!ALLOWED_ROLES.includes(role.toLowerCase())) {   // second line of defence; the backend already gates by app
+    try { await apiCall(ACTIONS.logout, { workerId: id }); } catch (e) { /* already refused */ }
+    clearState();
+    throw apiError('This console is for managers and founders. Your account is set up as ' + (role ? '"' + role + '"' : 'a role without access') + '.', 'ROLE');
+  }
+  state.managerId = id;
+  state.managerName = g(res, 'name', 'workerName', 'fullName') || id;
+  state.role = titleCase(role);
+  renderHeader();
+}
+
+async function logout(workerId = state.managerId) {
+  try { if (workerId) await apiCall(ACTIONS.logout, { workerId, device: deviceLabel() }); } catch (e) { /* leave anyway */ }
+  clearState();
+  switchView('view-login');
+}
+function forceLogout(message) {
+  clearState(); switchView('view-login');
+  const box = $('#login-error'); box.textContent = message; box.hidden = false;
+}
+
+async function handleLogin() {
+  const idEl = $('#login-id'), pinEl = $('#login-pin'), btn = $('#login-btn'), box = $('#login-error');
+  const id = idEl.value.trim(), pin = pinEl.value.trim();
+  box.hidden = true;
+  if (!id || !pin) { box.textContent = 'Enter your worker ID and PIN.'; box.hidden = false; return; }
+  btn.disabled = true; btn.textContent = 'Signing in';
+  try {
+    await login(id, pin);
+    pinEl.value = ''; idEl.value = '';
+    switchView('view-board');
+  } catch (err) {
+    pinEl.value = '';
+    box.textContent = err.message || 'Sign in failed.'; box.hidden = false;
+  } finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+}
+
+function renderHeader() {
+  const on = !!state.managerId;
+  $('#hd-id').hidden = !on;
+  $('#hd-name').textContent = state.managerName || '';
+  $('#hd-role').textContent = state.role || '';
+  if (!on) setConn('idle');
+}
+
+/* ==========================================================================
+   NAVIGATION
+   ========================================================================== */
+const LOADERS = {
+  'view-board': () => loadBoard(),
+  'view-queue': () => loadQueue(),
+  'view-harvest-ready': () => loadHarvestCandidates(),
+  'view-harvest-complete': () => loadHarvestableCohorts(),
+  'view-activity-log': () => loadActivityLog(),
+  'view-history': () => loadHistory(),
+  'view-scouting': () => loadScoutFindings()
+};
+function switchView(viewId) {
+  $$('.view').forEach(v => { v.hidden = v.id !== viewId; });
+  ui.view = viewId;
+  window.scrollTo(0, 0);
+  const h = $('#' + viewId + ' h2[tabindex]') || $('#' + viewId + ' h2');
+  if (h) h.focus({ preventScroll: true });
+  if (LOADERS[viewId] && state.managerId) LOADERS[viewId]();
+}
+
+/* ==========================================================================
+   LOADERS + RENDERERS
+   ========================================================================== */
+async function ensureWorkers() {
+  if (state.workers.length) return state.workers;
+  const res = await apiCall(ACTIONS.listWorkers);
+  state.workers = listOf(res, 'workers', 'users', 'data').map(w => ({
+    id: String(g(w, 'workerId', 'id', 'userId') || ''), name: g(w, 'name', 'workerName', 'fullName') || String(g(w, 'workerId', 'id') || ''),
+    role: g(w, 'role') || ''
+  })).filter(w => w.id);
+  return state.workers;
+}
+const workerName = id => { const w = state.workers.find(x => x.id === String(id)); return w ? w.name : id; };
+
+/* ----- 2. live board ----- */
+async function loadBoard(opts = {}) {
+  const box = $('#board-list');
+  if (!opts.silent) box.innerHTML = skeleton(3);
+  try {
+    const res = await apiCall(ACTIONS.board);
+    state.sessions = listOf(res, 'sessions', 'openSessions', 'board').map(normSession);
+    renderBoard();
+    ensureWorkers().catch(() => {});
+  } catch (err) { if (!opts.silent) box.innerHTML = errBox(err.message, 'view-board'); else toast(err.message); }
+}
+function normSession(s) {
+  return {
+    id: String(g(s, 'sessionId', 'id', 'activityId') || ''),
+    workerId: String(g(s, 'workerId', 'worker') || ''),
+    worker: g(s, 'workerName', 'name', 'worker', 'workerId') || 'Unknown worker',
+    task: g(s, 'taskType', 'task', 'activity') || 'Task not set',
+    bedId: g(s, 'bedId', 'bed') || '', cohortId: g(s, 'cohortId', 'cohort') || '', crop: g(s, 'cropName', 'crop') || '',
+    start: g(s, 'startTime', 'startedAt', 'start')
+  };
+}
+function renderBoard() {
+  $('#board-meta').textContent = state.sessions.length ? state.sessions.length + ' open, updated ' + fmtTime(new Date()) : 'Updated ' + fmtTime(new Date());
+  const box = $('#board-list');
+  if (!state.sessions.length) { box.innerHTML = empty('No open sessions', 'Nobody is signed into a bed right now. Sessions appear here as soon as a worker starts one.'); return; }
+  box.innerHTML = state.sessions.map((s, i) => `
+    <article class="session">
+      <div class="session-top">
+        <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p></div>
+        <div class="elapsed"><span data-since="${esc(s.start || '')}">${esc(elapsedText(s.start) || '-')}</span><small>${s.start ? 'since ' + esc(fmtTime(s.start)) : 'start time missing'}</small></div>
+      </div>
+      <dl class="facts">
+        <div><dt>Bed</dt><dd>${esc(s.bedId || '-')}</dd></div>
+        <div><dt>Cohort</dt><dd>${esc(s.cohortId || '-')}</dd></div>
+        <div><dt>Crop</dt><dd>${esc(s.crop || '-')}</dd></div>
+      </dl>
+      <button class="btn btn-block" data-act="reassign" data-i="${i}" type="button">Reassign</button>
+    </article>`).join('');
+}
+
+/* ----- 3. reassignment history ----- */
+async function loadHistory() {
+  const box = $('#history-list'); box.innerHTML = skeleton(4);
+  try {
+    const res = await apiCall(ACTIONS.reassignmentLog);
+    state.history = listOf(res, 'log', 'history', 'reassignments', 'entries');
+    const rows = state.history.slice().sort((a, b) => (toDate(g(b, 'timestamp', 'time', 'date')) || 0) - (toDate(g(a, 'timestamp', 'time', 'date')) || 0));
+    if (!rows.length) { box.innerHTML = empty('No reassignments yet', 'When you reassign a session or close it and start a new one, it is recorded here.'); return; }
+    box.innerHTML = '<div class="list">' + rows.map(r => {
+      const mode = String(g(r, 'mode', 'type', 'action') || '');
+      const closeNew = /close/i.test(mode);
+      const from = g(r, 'fromWorkerName', 'fromWorker', 'fromWorkerId', 'from') || 'Unknown';
+      const to = g(r, 'toWorkerName', 'toWorker', 'toWorkerId', 'to') || 'Unknown';
+      const by = g(r, 'managerName', 'managerId', 'by');
+      const note = g(r, 'note', 'notes', 'reason');
+      return `<div class="item">
+        <div class="item-top"><span class="item-title">${esc(from)} to ${esc(to)}</span><span class="item-time">${esc(fmtDateTime(g(r, 'timestamp', 'time', 'date')))}</span></div>
+        <div class="chips"><span class="chip ${closeNew ? 'med' : 'neutral'}">${closeNew ? 'Closed and started new' : 'Reassigned'}</span></div>
+        <p class="sub">${['Bed ' + (g(r, 'bedId', 'bed') || '-'), g(r, 'cohortId', 'cohort'), g(r, 'taskType', 'task')].filter(Boolean).map(esc).join(', ')}${by ? ', by ' + esc(by) : ''}</p>
+        ${note ? `<p>${esc(note)}</p>` : ''}
+      </div>`;
+    }).join('') + '</div>';
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-history'); }
+}
+
+/* ----- 4. activity log ----- */
+async function loadActivityLog() {
+  const box = $('#activity-list'); box.innerHTML = skeleton(4);
+  try {
+    const [res] = await Promise.all([apiCall(ACTIONS.activityHistory), ensureWorkers().catch(() => [])]);
+    state.activityLog = listOf(res, 'activities', 'history', 'log', 'entries');
+    const sel = $('#activity-worker'), cur = sel.value;
+    const ids = Array.from(new Set(state.activityLog.map(a => String(g(a, 'workerId', 'worker') || '')).filter(Boolean)));
+    sel.innerHTML = '<option value="">All workers</option>' + ids.map(id => `<option value="${esc(id)}">${esc(workerName(id))}</option>`).join('');
+    sel.value = ids.includes(cur) ? cur : '';
+    renderActivityLog();
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-activity-log'); }
+}
+function activityKind(a) {
+  const t = String(g(a, 'type', 'kind', 'entryType') || '').toLowerCase();
+  if (/state|cohort|change/.test(t)) return 'state';
+  if (g(a, 'fromState', 'toState', 'newState')) return 'state';
+  return 'session';
+}
+function renderActivityLog() {
+  const box = $('#activity-list'), wk = $('#activity-worker').value;
+  $$('#activity-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === ui.activityType)));
+  const rows = state.activityLog
+    .filter(a => (ui.activityType === 'all' || activityKind(a) === ui.activityType) && (!wk || String(g(a, 'workerId', 'worker') || '') === wk))
+    .sort((a, b) => (toDate(g(b, 'endTime', 'timestamp', 'time', 'startTime')) || 0) - (toDate(g(a, 'endTime', 'timestamp', 'time', 'startTime')) || 0));
+  if (!rows.length) { box.innerHTML = empty('Nothing matches', 'Try another worker or entry type. Completed sessions and cohort state changes show up here.'); return; }
+  box.innerHTML = '<div class="list">' + rows.map(a => {
+    const kind = activityKind(a);
+    const when = g(a, 'endTime', 'timestamp', 'time', 'startTime');
+    const who = g(a, 'workerName') || workerName(g(a, 'workerId', 'worker')) || '';
+    if (kind === 'state') {
+      const from = g(a, 'fromState', 'previousState', 'from'), to = g(a, 'toState', 'newState', 'to');
+      return `<div class="item stripe med">
+        <div class="item-top"><span class="item-title">${esc(g(a, 'cohortId', 'cohort') || 'Cohort')} changed state</span><span class="item-time">${esc(fmtDateTime(when))}</span></div>
+        <p>${from ? esc(from) + ' to ' : 'Now '}<b>${esc(to || 'unknown')}</b></p>
+        <p class="sub">${['Bed ' + (g(a, 'bedId', 'bed') || '-'), who && 'by ' + who].filter(Boolean).map(esc).join(', ')}</p></div>`;
+    }
+    const dur = g(a, 'durationMinutes', 'duration') !== undefined ? durationText(g(a, 'durationMinutes', 'duration')) : '';
+    const range = [fmtTime(g(a, 'startTime')), fmtTime(g(a, 'endTime'))].filter(Boolean).join(' to ');
+    return `<div class="item stripe low">
+      <div class="item-top"><span class="item-title">${esc(g(a, 'taskType', 'task') || 'Session')} completed</span><span class="item-time">${esc(fmtDateTime(when))}</span></div>
+      <p>${esc(who)}${dur ? ', ' + esc(dur) : ''}</p>
+      <p class="sub">${['Bed ' + (g(a, 'bedId', 'bed') || '-'), g(a, 'cohortId', 'cohort'), range].filter(Boolean).map(esc).join(', ')}</p>
+      ${g(a, 'notes', 'note') ? `<p>${esc(g(a, 'notes', 'note'))}</p>` : ''}</div>`;
+  }).join('') + '</div>';
+}
+
+/* ----- 5. scouting ----- */
+async function loadScoutFindings() {
+  const box = $('#scout-list'); box.innerHTML = skeleton(4);
+  try {
+    const res = await apiCall(ACTIONS.scoutFindings);
+    state.scoutFindings = listOf(res, 'findings', 'scoutFindings', 'entries').map(normFinding);
+    const sel = $('#scout-bed'), cur = sel.value;
+    const beds = Array.from(new Set(state.scoutFindings.map(f => f.bedId).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="">All beds</option>' + beds.map(b => `<option>${esc(b)}</option>`).join('');
+    sel.value = beds.includes(cur) ? cur : '';
+    renderScouting();
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-scouting'); }
+}
+function normFinding(f) {
+  return {
+    id: g(f, 'findingId', 'id') || '', bedId: String(g(f, 'bedId', 'bed') || ''), cohortId: g(f, 'cohortId') || '',
+    domain: g(f, 'domain') || '', symptom: g(f, 'symptom') || '', severity: String(g(f, 'severity') || '').toUpperCase(),
+    requiresAction: truthy(g(f, 'requiresAction')), notes: g(f, 'notes', 'note') || '', photo: safeUrl(g(f, 'photoUrl', 'photo')),
+    worker: g(f, 'workerName', 'worker') || '', time: g(f, 'timestamp', 'time'), exceptionId: g(f, 'exceptionId') || '',
+    status: String(g(f, 'resolvedStatus', 'status') || '').toUpperCase()
+  };
+}
+function renderScouting() {
+  const box = $('#scout-list'), bed = $('#scout-bed').value, dom = $('#scout-domain').value, st = $('#scout-status').value;
+  const rows = state.scoutFindings
+    .filter(f => (!bed || f.bedId === bed) && (!dom || f.domain === dom) && (!st || (f.status || 'OPEN') === st))
+    .sort((a, b) => sevRank(a.severity) - sevRank(b.severity) || (toDate(b.time) || 0) - (toDate(a.time) || 0));
+  if (!rows.length) { box.innerHTML = empty('No findings match', 'Change the bed, domain or status filter. New findings appear as workers submit them.'); return; }
+  box.innerHTML = '<div class="list">' + rows.map(f => {
+    const resolved = f.status === 'RESOLVED';
+    return `<div class="item stripe ${sevClass(f.severity)}">
+      <div class="item-top"><span class="item-title">${esc(f.symptom || 'Finding')}</span><span class="item-time">${esc(fmtDateTime(f.time))}</span></div>
+      <div class="chips">
+        <span class="chip ${sevClass(f.severity)}">${esc(titleCase(f.severity) || 'No severity')}</span>
+        <span class="chip neutral">${esc(f.domain || 'No domain')}</span>
+        ${f.requiresAction ? `<span class="chip ${resolved ? 'neutral' : 'crit'}">${f.exceptionId ? 'Exception ' + esc(f.exceptionId) : 'Needs action'}, ${resolved ? 'resolved' : 'open'}</span>` : '<span class="chip neutral">No action needed</span>'}
+      </div>
+      <p class="sub">${['Bed ' + (f.bedId || '-'), f.cohortId, f.worker && 'by ' + f.worker].filter(Boolean).map(esc).join(', ')}</p>
+      ${f.notes ? `<p>${esc(f.notes)}</p>` : ''}
+      ${f.photo ? `<p><a href="${esc(f.photo)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);font-weight:700">View photo</a></p>` : (f.severity === 'HIGH' || f.severity === 'CRITICAL') ? '<p class="sub">No photo attached.</p>' : ''}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+/* ----- 6. today / queue ----- */
+async function loadQueue() {
+  const box = $('#queue-list'); box.innerHTML = skeleton(3);
+  try {
+    const res = await apiCall(ACTIONS.dailyQueue);
+    const q = (res && res.queue) ? res.queue : (res || {});
+    state.queue = {
+      generatedAt: g(q, 'generatedAt', 'generated') || null, counts: g(q, 'counts') || {},
+      mustDo: listOf(g(q, 'mustDo'), 'items'), attention: listOf(g(q, 'attention'), 'items'), routine: listOf(g(q, 'routine'), 'items')
+    };
+    renderQueue();
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-queue'); }
+}
+function renderQueue() {
+  const q = state.queue, box = $('#queue-list');
+  $('#queue-meta').textContent = q.generatedAt ? 'Built ' + fmtDateTime(q.generatedAt) + ' by the backend.' : '';
+  const buckets = [
+    { key: 'mustDo', title: 'Must do', cls: 'crit', items: q.mustDo },
+    { key: 'attention', title: 'Attention', cls: 'med', items: q.attention },
+    { key: 'routine', title: 'Routine', cls: 'low', items: q.routine }
+  ];
+  if (!buckets.some(b => b.items.length)) { box.innerHTML = empty('Nothing queued for today', 'The backend has no work for the field today. Pull to refresh later in the day.'); return; }
+  box.innerHTML = buckets.map(b => {
+    const n = (q.counts && q.counts[b.key] != null) ? q.counts[b.key] : b.items.length;
+    const groups = new Map();
+    b.items.forEach(it => {
+      const cohort = g(it, 'cohortId', 'cohort'), bed = g(it, 'bedId', 'bed');
+      const key = cohort ? 'c:' + cohort : bed ? 'b:' + bed : 'o:other';
+      if (!groups.has(key)) groups.set(key, { label: cohort ? cohort : bed ? 'Bed ' + bed : 'Other', crop: g(it, 'cropName', 'crop') || '', items: [] });
+      groups.get(key).items.push(it);
+    });
+    return `<section class="bucket" aria-label="${b.title}">
+      <div class="bucket-head"><h3>${b.title}</h3><span class="count">${esc(n)}</span></div>
+      ${b.items.length ? Array.from(groups.values()).map(gr => `
+        <div class="group"><div class="group-head"><b>${esc(gr.label)}</b><span class="sub">${esc(gr.crop)}</span></div>
+        ${gr.items.map(it => `<div class="item stripe ${b.cls}">
+          <div class="item-top"><span class="item-title">${esc(g(it, 'title', 'task', 'description', 'reason', 'message') || 'Task')}</span><span class="item-time">${esc(fmtDateTime(g(it, 'dueTime', 'due', 'dueDate')))}</span></div>
+          ${g(it, 'detail', 'details', 'reason') && g(it, 'title', 'task') ? `<p>${esc(g(it, 'detail', 'details', 'reason'))}</p>` : ''}
+          <p class="sub">${[g(it, 'bedId', 'bed') && 'Bed ' + g(it, 'bedId', 'bed'), g(it, 'taskType', 'type'), g(it, 'assignedTo', 'workerName')].filter(Boolean).map(esc).join(', ')}</p>
+        </div>`).join('')}</div>`).join('') : '<p class="sub">Nothing in this group.</p>'}
+    </section>`;
+  }).join('');
+}
+
+/* ----- 7. harvest ready ----- */
+async function loadHarvestCandidates() {
+  const box = $('#hr-list'); box.innerHTML = skeleton(3);
+  try {
+    const res = await apiCall(ACTIONS.harvestCandidates);
+    state.harvestCandidates = listOf(res, 'candidates', 'cohorts', 'items').map(normHarvest);
+    renderHarvestReady();
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-harvest-ready'); }
+}
+function normHarvest(h) {
+  return { cohortId: String(g(h, 'cohortId', 'cohort') || ''), bedId: String(g(h, 'bedId', 'bed') || ''), qr: String(g(h, 'qrCode', 'qr') || ''),
+    crop: g(h, 'cropName', 'crop') || '', ready: g(h, 'harvestReadyDate', 'readyDate', 'harvestStart', 'plannedHarvestStart'),
+    state: g(h, 'fieldState', 'state', 'status') || '', location: g(h, 'locationId', 'blockId', 'zone') || '' };
+}
+function renderHarvestReady(hitIndex) {
+  const box = $('#hr-list');
+  if (!state.harvestCandidates.length) { box.innerHTML = empty('No beds waiting for verification', 'When a cohort reaches its harvest window and a worker flags the bed, it shows up here.'); return; }
+  box.innerHTML = '<div class="list">' + state.harvestCandidates.map((h, i) => `
+    <div class="item ${i === hitIndex ? 'hit' : ''}" id="hr-${i}">
+      <div class="item-top"><span class="item-title">Bed ${esc(h.bedId || '-')}, ${esc(h.cohortId || 'no cohort')}</span><span class="item-time">${h.ready ? 'Ready ' + esc(fmtDate(h.ready)) : ''}</span></div>
+      <p class="sub">${[h.crop, h.location, h.state].filter(Boolean).map(esc).join(', ')}</p>
+      <div class="verify-row"><button class="btn btn-primary btn-block" data-act="verify-ready" data-i="${i}" type="button">Verify harvest ready</button></div>
+    </div>`).join('') + '</div>';
+  if (hitIndex != null) { const el = $('#hr-' + hitIndex); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+function findCandidate(raw) {
+  const tokens = String(raw || '').toLowerCase().split(/[\/?=&#:\s,;]+/).filter(Boolean);
+  if (!tokens.length) return -1;
+  return state.harvestCandidates.findIndex(h => [h.bedId, h.qr, h.cohortId].map(x => x.toLowerCase()).filter(Boolean).some(id => tokens.includes(id)));
+}
+function handleScan(raw) {
+  const value = String(raw || '').trim(); if (!value) { toast('Type or scan a bed ID first.'); return; }
+  $('#scan-input').value = value;
+  const i = findCandidate(value);
+  if (i < 0) { renderHarvestReady(); toast('Bed ' + value + ' is not on the harvest-ready list.'); return; }
+  renderHarvestReady(i);
+  confirmVerifyReady(i);
+}
+
+/* camera scan (needs HTTPS and a browser with BarcodeDetector, e.g. Chrome on Android) */
+let scanStream = null, scanRaf = 0;
+async function scanCamera() {
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Camera scanning is not available on this browser. Type the bed ID or use a scanner.'); $('#scan-input').focus(); return;
+  }
+  try {
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = $('#scan-video'); video.srcObject = scanStream; await video.play();
+    $('#scanner').showModal();
+    const tick = async () => {
+      if (!scanStream) return;
+      try { const codes = await detector.detect(video); if (codes.length) { const v = codes[0].rawValue; stopScan(); handleScan(v); return; } } catch (e) { /* keep trying */ }
+      scanRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) { stopScan(); toast('Could not open the camera. Allow camera access or type the bed ID.'); }
+}
+function stopScan() {
+  cancelAnimationFrame(scanRaf);
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  const d = $('#scanner'); if (d.open) d.close();
+}
+$('#scanner').addEventListener('close', () => { if (scanStream) stopScan(); });
+
+/* ----- 8. harvest complete ----- */
+async function loadHarvestableCohorts() {
+  const box = $('#hc-list'); box.innerHTML = skeleton(3);
+  try {
+    const res = await apiCall(ACTIONS.harvestableCohorts);
+    state.harvestableCohorts = listOf(res, 'cohorts', 'items', 'harvestable').map(h => ({
+      cohortId: String(g(h, 'cohortId', 'cohort') || ''), crop: g(h, 'cropName', 'crop') || '', beds: g(h, 'beds', 'bedIds', 'bedId', 'bed') || '',
+      lastHarvest: g(h, 'lastHarvestTime', 'lastHarvest', 'actualHarvestStart'), weight: g(h, 'totalWeight', 'weight'), state: g(h, 'fieldState', 'state', 'status') || ''
+    }));
+    renderHarvestComplete();
+  } catch (err) { box.innerHTML = errBox(err.message, 'view-harvest-complete'); }
+}
+function renderHarvestComplete() {
+  const box = $('#hc-list');
+  if (!state.harvestableCohorts.length) { box.innerHTML = empty('No cohorts ready to close out', 'Cohorts appear here after harvest has been logged and is ready for you to close out.'); return; }
+  box.innerHTML = '<div class="list">' + state.harvestableCohorts.map((c, i) => `
+    <div class="item">
+      <div class="item-top"><span class="item-title">${esc(c.cohortId)}</span><span class="item-time">${c.lastHarvest ? 'Last harvest ' + esc(fmtDateTime(c.lastHarvest)) : ''}</span></div>
+      <p class="sub">${[c.crop, c.beds && 'Beds ' + (Array.isArray(c.beds) ? c.beds.join(', ') : c.beds), c.weight != null && c.weight !== '' ? 'Harvested ' + c.weight : '', c.state].filter(Boolean).map(esc).join(', ')}</p>
+      <div class="verify-row"><button class="btn btn-primary btn-block" data-act="verify-complete" data-i="${i}" type="button">Verify harvest complete</button></div>
+    </div>`).join('') + '</div>';
+}
+
+/* ==========================================================================
+   SHEETS (confirmations and write actions)
+   ========================================================================== */
+function openSheet({ title, body, actions }) {
+  const dlg = $('#sheet');
+  $('#sheet-body').innerHTML = `<h3 id="sheet-title">${esc(title)}</h3>${body}<div class="form-error" id="sheet-error" role="alert" hidden></div>
+    <div class="sheet-actions">${actions.map((a, i) => `<button type="button" class="btn ${a.primary ? 'btn-primary' : ''}" data-sheet="${i}">${esc(a.label)}</button>`).join('')}
+    <button type="button" class="btn" data-sheet="cancel">Cancel</button></div>`;
+  $('#sheet-body').onclick = async e => {
+    const b = e.target.closest('[data-sheet]'); if (!b) return;
+    if (b.dataset.sheet === 'cancel') { dlg.close(); return; }
+    const a = actions[Number(b.dataset.sheet)];
+    const btns = $$('#sheet-body [data-sheet]'); btns.forEach(x => { x.disabled = true; });
+    $('#sheet-error').hidden = true;
+    try { await a.run(); dlg.close(); if (a.done) toast(a.done); }
+    catch (err) { const box = $('#sheet-error'); box.textContent = err.message || 'That did not work.'; box.hidden = false; btns.forEach(x => { x.disabled = false; }); }
+  };
+  dlg.showModal();
+}
+const sumRows = rows => '<div class="sum">' + rows.filter(r => r[1]).map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('') + '</div>';
+
+async function openReassign(i) {
+  const s = state.sessions[i]; if (!s) return;
+  let workers = [];
+  try { workers = await ensureWorkers(); } catch (e) { toast('Could not load the worker list. ' + e.message); return; }
+  const options = workers.filter(w => w.id !== s.workerId);
+  if (!options.length) { toast('No other workers are available to reassign to.'); return; }
+  const run = mode => async () => {
+    const to = $('#rs-worker').value, note = $('#rs-note').value.trim();
+    if (!to) throw apiError('Choose a worker first.', 'INPUT');
+    await apiCall(mode === 'close' ? ACTIONS.closeAndNew : ACTIONS.reassignSession,
+      { sessionId: s.id, fromWorkerId: s.workerId, toWorkerId: to, bedId: s.bedId, cohortId: s.cohortId, taskType: s.task, note });
+    await loadBoard({ silent: true });
+  };
+  openSheet({
+    title: 'Reassign session',
+    body: sumRows([['Worker', s.worker], ['Task', s.task], ['Bed', s.bedId], ['Cohort', s.cohortId], ['Open for', elapsedText(s.start)]]) + `
+      <label class="field"><span>Give it to</span><select class="input" id="rs-worker"><option value="">Choose a worker</option>${options.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Note (optional)</span><input class="input" id="rs-note" maxlength="200" autocomplete="off"></label>
+      <p class="hint">Reassign moves this open session to the new worker. Close and new ends it now and starts a fresh one. Both are logged.</p>`,
+    actions: [
+      { label: 'Reassign', primary: true, run: run('move'), done: 'Session reassigned.' },
+      { label: 'Close & new', run: run('close'), done: 'Session closed and a new one started.' }
+    ]
+  });
+}
+function confirmVerifyReady(i) {
+  const h = state.harvestCandidates[i]; if (!h) return;
+  openSheet({
+    title: 'Verify harvest ready',
+    body: sumRows([['Bed', h.bedId], ['Cohort', h.cohortId], ['Crop', h.crop], ['Ready date', h.ready ? fmtDate(h.ready) : '']]) +
+      '<p class="hint">Only verify after you have checked the bed. This moves the cohort to its next field state.</p>',
+    actions: [{ label: 'Verify harvest ready', primary: true, done: 'Harvest ready verified.',
+      run: async () => { await apiCall(ACTIONS.verifyHarvestReady, { cohortId: h.cohortId, bedId: h.bedId }); await loadHarvestCandidates(); } }]
+  });
+}
+function confirmVerifyComplete(i) {
+  const c = state.harvestableCohorts[i]; if (!c) return;
+  openSheet({
+    title: 'Verify harvest complete',
+    body: sumRows([['Cohort', c.cohortId], ['Crop', c.crop], ['Beds', Array.isArray(c.beds) ? c.beds.join(', ') : c.beds]]) +
+      '<p class="hint">This closes out the cohort harvest. Confirm all beds are finished.</p>',
+    actions: [{ label: 'Verify harvest complete', primary: true, done: 'Harvest complete verified.',
+      run: async () => { await apiCall(ACTIONS.verifyHarvestComplete, { cohortId: c.cohortId }); await loadHarvestableCohorts(); } }]
+  });
+}
+
+/* ==========================================================================
+   EVENTS
+   ========================================================================== */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const i = Number(t.dataset.i);
+  switch (t.dataset.act) {
+    case 'login': handleLogin(); break;
+    case 'logout': logout(); break;
+    case 'refresh': (LOADERS[ui.view] || (() => {}))(); break;
+    case 'nav': switchView(t.dataset.view); break;
+    case 'back': switchView('view-board'); break;
+    case 'retry': (LOADERS[t.dataset.view] || (() => {}))(); break;
+    case 'reassign': openReassign(i); break;
+    case 'verify-ready': confirmVerifyReady(i); break;
+    case 'verify-complete': confirmVerifyComplete(i); break;
+    case 'scan-lookup': handleScan($('#scan-input').value); break;
+    case 'scan-camera': scanCamera(); break;
+    case 'scan-stop': stopScan(); break;
+    case 'activity-type': ui.activityType = t.dataset.type; renderActivityLog(); break;
+  }
+});
+['#login-id', '#login-pin'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); }));
+$('#scan-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleScan(e.target.value); });
+$('#activity-worker').addEventListener('change', renderActivityLog);
+['#scout-bed', '#scout-domain', '#scout-status'].forEach(s => $(s).addEventListener('change', renderScouting));
+
+/* board auto-refresh and live elapsed timers */
+setInterval(() => {
+  if (!state.managerId || document.hidden) return;
+  $$('[data-since]').forEach(el => { const v = elapsedText(el.dataset.since); if (v) el.textContent = v; });
+}, 30000);
+setInterval(() => { if (state.managerId && ui.view === 'view-board' && !document.hidden) loadBoard({ silent: true }); }, BOARD_REFRESH_MS);
+
+/* ==========================================================================
+   DEMO BACKEND (only used when WEB_APP_URL is empty). Sample data, not real.
+   ========================================================================== */
+const mock = (() => {
+  const now = Date.now(), min = m => new Date(now - m * 60000).toISOString(), ahead = m => new Date(now + m * 60000).toISOString();
+  const users = { 'USR-MANAGER1': { pin: '1234', name: 'Maya Ortiz', role: 'Manager' }, 'USR-FOUNDER1': { pin: '1234', name: 'Sam Reyes', role: 'Founder' }, 'USR-WORKER1': { pin: '1234', name: 'Jo Lindqvist', role: 'Worker' } };
+  const d = {
+    workers: [{ workerId: 'W01', name: 'Ana Prieto', role: 'Worker' }, { workerId: 'W02', name: 'Ben Okafor', role: 'Worker' }, { workerId: 'W03', name: 'Chloe Weber', role: 'Worker' }, { workerId: 'W07', name: 'Jo Lindqvist', role: 'Worker' }],
+    sessions: [
+      { sessionId: 'S-1041', workerId: 'W01', workerName: 'Ana Prieto', taskType: 'Weeding', bedId: 'B-12', cohortId: 'LET-C01', cropName: 'Lettuce', startTime: min(142) },
+      { sessionId: 'S-1042', workerId: 'W02', workerName: 'Ben Okafor', taskType: 'Transplanting', bedId: 'B-07', cohortId: 'KAL-C02', cropName: 'Kale', startTime: min(37) },
+      { sessionId: 'S-1043', workerId: 'W03', workerName: 'Chloe Weber', taskType: 'Irrigation check', bedId: 'B-21', cohortId: '', cropName: '', startTime: min(9) }],
+    log: [
+      { timestamp: min(200), fromWorkerId: 'W03', toWorkerId: 'W01', mode: 'reassign', bedId: 'B-12', cohortId: 'LET-C01', taskType: 'Weeding', managerName: 'Maya Ortiz', note: 'Ana is closer to the block' },
+      { timestamp: min(1500), fromWorkerId: 'W02', toWorkerId: 'W03', mode: 'close-and-new', bedId: 'B-03', cohortId: 'ARU-C03', taskType: 'Harvest', managerName: 'Sam Reyes', note: '' }],
+    activity: [
+      { type: 'session', workerId: 'W02', taskType: 'Seeding', bedId: 'B-05', cohortId: 'ARU-C04', startTime: min(420), endTime: min(370), durationMinutes: 50 },
+      { type: 'session', workerId: 'W01', taskType: 'Harvest', bedId: 'B-03', cohortId: 'ARU-C03', startTime: min(330), endTime: min(255), durationMinutes: 75, notes: 'Two crates, cold chain ok' },
+      { type: 'cohort-state', workerId: 'W01', cohortId: 'ARU-C03', bedId: 'B-03', fromState: 'HARVEST_READY', toState: 'HARVESTING', timestamp: min(335) },
+      { type: 'session', workerId: 'W03', taskType: 'Irrigation check', bedId: 'B-20', startTime: min(600), endTime: min(585), durationMinutes: 15 }],
+    scout: [
+      { findingId: 'SF-000123', bedId: 'B-12', cohortId: 'LET-C01', domain: 'PestPressure', symptom: 'Aphids on outer leaves', severity: 'HIGH', requiresAction: true, notes: 'Clusters on about a third of plants', photoUrl: 'https://example.com/photo/aphids.jpg', worker: 'Ana Prieto', timestamp: min(95), exceptionId: 'EXC-0012', resolvedStatus: 'OPEN' },
+      { findingId: 'SF-000124', bedId: 'B-07', cohortId: 'KAL-C02', domain: 'PlantCondition', symptom: 'Wilting after transplant', severity: 'CRITICAL', requiresAction: true, notes: '', photoUrl: '', worker: 'Ben Okafor', timestamp: min(20), exceptionId: 'EXC-0013', resolvedStatus: 'OPEN' },
+      { findingId: 'SF-000119', bedId: 'B-03', cohortId: 'ARU-C03', domain: 'WeedCompetition', symptom: 'Heavy weeds at bed edge', severity: 'MEDIUM', requiresAction: true, notes: 'Hand weeded', photoUrl: '', worker: 'Ana Prieto', timestamp: min(1600), exceptionId: 'EXC-0009', resolvedStatus: 'RESOLVED' },
+      { findingId: 'SF-000121', bedId: 'B-21', cohortId: '', domain: 'SoilWater', symptom: 'Dry patch near emitter', severity: 'LOW', requiresAction: false, notes: '', photoUrl: '', worker: 'Chloe Weber', timestamp: min(300), exceptionId: '', resolvedStatus: 'OPEN' },
+      { findingId: 'SF-000117', bedId: 'B-12', cohortId: 'LET-C01', domain: 'DiseasePressure', symptom: 'Yellowing on lower leaves', severity: 'MEDIUM', requiresAction: false, notes: 'Watch', photoUrl: '', worker: 'Ben Okafor', timestamp: min(2900), exceptionId: '', resolvedStatus: 'OPEN' }],
+    queue: { generatedAt: min(12), counts: { mustDo: 2, attention: 3, routine: 3 },
+      mustDo: [{ cohortId: 'KAL-C02', cropName: 'Kale', bedId: 'B-07', title: 'Replant wilted transplants', detail: 'Critical scouting finding SF-000124', taskType: 'Exception', dueTime: ahead(60) },
+               { cohortId: 'LET-C01', cropName: 'Lettuce', bedId: 'B-12', title: 'Treat aphids', detail: 'High severity finding SF-000123', taskType: 'Exception', dueTime: ahead(180) }],
+      attention: [{ cohortId: 'LET-C01', cropName: 'Lettuce', bedId: 'B-12', title: 'Check harvest window', taskType: 'Review', dueTime: ahead(600) },
+                  { cohortId: 'ARU-C04', cropName: 'Arugula', bedId: 'B-05', title: 'Confirm germination count', taskType: 'Review', dueTime: ahead(720) },
+                  { bedId: 'B-21', title: 'Inspect dry patch', taskType: 'Irrigation', dueTime: ahead(400) }],
+      routine: [{ cohortId: 'ARU-C04', cropName: 'Arugula', bedId: 'B-05', title: 'Irrigate', taskType: 'Irrigation', dueTime: ahead(300) },
+                { cohortId: 'ARU-C04', cropName: 'Arugula', bedId: 'B-06', title: 'Irrigate', taskType: 'Irrigation', dueTime: ahead(320) },
+                { cohortId: 'KAL-C02', cropName: 'Kale', bedId: 'B-08', title: 'Irrigate', taskType: 'Irrigation', dueTime: ahead(340) }] },
+    candidates: [
+      { cohortId: 'ARU-C04', bedId: 'B-05', qrCode: 'QR-B05', cropName: 'Arugula', harvestReadyDate: ahead(-60 * 24), fieldState: 'HARVEST_READY_PENDING', blockId: 'Block 2' },
+      { cohortId: 'LET-C01', bedId: 'B-12', qrCode: 'QR-B12', cropName: 'Lettuce', harvestReadyDate: ahead(60 * 20), fieldState: 'HARVEST_READY_PENDING', blockId: 'Block 3' }],
+    harvestable: [
+      { cohortId: 'ARU-C03', cropName: 'Arugula', beds: ['B-03', 'B-04'], lastHarvestTime: min(255), totalWeight: '38 kg', fieldState: 'HARVESTING' }]
+  };
+  const ok = data => ({ ok: true, data });
+  const bad = (msg, code) => ({ ok: false, error: msg, code });
+  const APP_ROLES = { ManagerApp: ['Manager', 'Founder'], WorkerApp: ['Worker', 'Technician', 'Scout'], ranch_aab: ['Manager', 'Founder'] };
+  const sessions = {};   // token -> user (like the real backend, identity lives server-side)
+  return async (action, p) => {
+    await new Promise(r => setTimeout(r, 180));
+    if (action === 'login') {
+      const u = users[String(p.workerId).toUpperCase()];
+      if (!u || u.pin !== String(p.pin)) return bad('Worker ID or PIN is not correct.', 'AUTH_FAILED');
+      const allowed = APP_ROLES[p.app] || [];
+      if (!allowed.includes(u.role)) return bad('This app is for ' + allowed.join(' and ') + ' accounts. Your account is set up as ' + u.role + '.', 'ROLE_NOT_ALLOWED');
+      const token = 'demo-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const id = String(p.workerId).toUpperCase(); sessions[token] = { id, name: u.name, role: u.role };
+      return ok({ workerId: id, name: u.name, role: u.role, token, expiresAt: new Date(now + 12 * 3600000).toISOString() });
+    }
+    if (action === 'logout') { delete sessions[p.token]; return ok({ loggedOut: true }); }
+    const me = sessions[p.token];
+    if (!me) return bad('Your session ended. Sign in again.', 'UNAUTHENTICATED');
+    if (!['Manager', 'Founder'].includes(me.role)) return bad('Your role (' + me.role + ') is not allowed to do that.', 'FORBIDDEN');
+    switch (action) {
+      case 'list-workers': return ok({ workers: d.workers });
+      case 'get-manager-board': return ok({ sessions: d.sessions });
+      case 'get-reassignment-log': return ok({ log: d.log });
+      case 'get-activity-history': return ok({ activities: d.activity });
+      case 'get-scout-findings': return ok({ findings: d.scout });
+      case 'get-daily-queue': return ok(d.queue);
+      case 'get-harvest-candidates': return ok({ candidates: d.candidates });
+      case 'get-harvestable-cohorts': return ok({ cohorts: d.harvestable });
+      case 'reassign-session': case 'close-and-new-session': {
+        const s = d.sessions.find(x => x.sessionId === p.sessionId); if (!s) return bad('That session is no longer open.', 'NOT_FOUND');
+        const to = d.workers.find(w => w.workerId === p.toWorkerId);
+        d.log.push({ timestamp: new Date().toISOString(), fromWorkerId: s.workerId, toWorkerId: p.toWorkerId, mode: action === 'reassign-session' ? 'reassign' : 'close-and-new', bedId: s.bedId, cohortId: s.cohortId, taskType: s.taskType, managerName: me.name, note: p.note || '' });
+        s.workerId = p.toWorkerId; s.workerName = to ? to.name : p.toWorkerId; if (action === 'close-and-new-session') s.startTime = new Date().toISOString();
+        return ok({ done: true });
+      }
+      case 'verify-harvest-ready': d.candidates = d.candidates.filter(c => c.cohortId !== p.cohortId); return ok({ done: true });
+      case 'verify-harvest-complete': d.harvestable = d.harvestable.filter(c => c.cohortId !== p.cohortId); return ok({ done: true });
+      default: return bad('That action is not available.', 'UNKNOWN_ACTION');
+    }
+  };
+})();
+// clone like a network round trip would, so the app never holds references into the demo data
+async function mockBackend(action, payload) { return JSON.parse(JSON.stringify(await mock(action, JSON.parse(JSON.stringify(payload))))); }
+
+/* ==========================================================================
+   START
+   ========================================================================== */
+$('#demo-strip').hidden = !IS_DEMO;
+$('#demo-hint').hidden = !IS_DEMO;
+renderHeader();
+switchView('view-login');
 </script>
 </body>
 </html>
