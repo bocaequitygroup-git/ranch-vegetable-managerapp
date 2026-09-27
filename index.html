@@ -644,7 +644,14 @@ function normSession(s) {
     // same root cause as bug 2 in the Activity History tab - ACTIVITY_REFERENCE.Description
     // was joined server-side for get-activity-history but not for get-manager-board. Now
     // fixed server-side too (withActivityDescription_() in Code_main.gs); this just reads it.
-    desc: g(s, 'description') || ''
+    desc: g(s, 'description') || '',
+    // FIX (bug 6): "who created/assigned this" was never read off the session either.
+    // Manager_ID is only set when a manager started or reassigned the session (a worker
+    // self-starting a task has no Manager_ID) - g() normalizes 'Manager_ID' to 'managerid'.
+    // Resolved to a display name via workerName(), same lookup used for reassignedFrom -
+    // listWorkersSafe_() (behind list-workers/ensureWorkers()) returns every USERS row,
+    // managers included, not just field workers.
+    managerId: g(s, 'managerId') || ''
   };
 }
 function renderBoard() {
@@ -657,17 +664,31 @@ function renderBoard() {
     const lastPause = s.pauseTimes[s.pauseTimes.length - 1];
     const stillPaused = paused && s.pauseTimes.length > s.resumeTimes.length;
     const lastReason = s.pauseReasons[s.pauseReasons.length - 1];
+    // FIX (bug 6): pause chip only ever said "X ago" (time since the pause started, which
+    // reads as elapsed-so-far, not a clock time) and never said what time the pause began.
+    // Now states reason, the actual clock time it was paused at, and how long it's been
+    // paused for (there's no resume time to report a completed span against while it's
+    // still open - "and counting" makes that explicit rather than implying a fixed duration).
     const chips = [];
     if (assigned) chips.push('<span class="chip neutral">Waiting for worker to start</span>');
-    if (stillPaused && lastPause) chips.push(`<span class="chip med">Paused${lastReason ? ': ' + esc(lastReason) : ''}, ${esc(elapsedText(lastPause))} ago</span>`);
-    if (s.reassignedFrom) chips.push(`<span class="chip neutral">Reassigned from ${esc(workerName(s.reassignedFrom))}</span>`);
+    if (stillPaused && lastPause) {
+      chips.push(`<span class="chip med">Paused${lastReason ? ': ' + esc(lastReason) : ''}, since ${esc(fmtTime(lastPause))} (${esc(elapsedText(lastPause))} and counting)</span>`);
+    }
+    // FIX (bug 6): chip used to say only "Reassigned from X" - the current assignee (s.worker)
+    // is the card's own title so it read fine in isolation, but didn't state the full handoff
+    // the way the Reassignments history view does ("X to Y"). Spelled out here too.
+    if (s.reassignedFrom) chips.push(`<span class="chip neutral">Reassigned from ${esc(workerName(s.reassignedFrom))} to ${esc(s.worker)}</span>`);
     const elapsed = assigned
       ? '<span>Not started</span><small>assigned, waiting</small>'
       : `<span data-since="${esc(s.start || '')}">${esc(elapsedText(s.start) || '-')}</span><small>${s.start ? (stillPaused ? 'started ' : 'since ') + esc(fmtTime(s.start)) : 'start time missing'}</small>`;
+    // FIX (bug 6): "Created by" / "Assigned by" was never shown at all - Manager_ID was
+    // read off the session (get-manager-board) but nothing in normSession()/renderBoard()
+    // surfaced it. Omitted entirely for a worker-self-started session (no Manager_ID).
+    const createdBy = s.managerId ? `<p class="sub">Assigned by ${esc(workerName(s.managerId))}</p>` : '';
     return `
     <article class="session">
       <div class="session-top">
-        <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p>${s.desc ? `<p class="sub">${esc(s.desc)}</p>` : ''}</div>
+        <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p>${s.desc ? `<p class="sub">${esc(s.desc)}</p>` : ''}${createdBy}</div>
         <div class="elapsed">${elapsed}</div>
       </div>
       ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
