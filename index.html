@@ -621,6 +621,7 @@ async function loadBoard(opts = {}) {
     ensureWorkers().catch(() => {});
   } catch (err) { if (!opts.silent) box.innerHTML = errBox(err.message, 'view-board'); else toast(err.message); }
 }
+const splitListLocal_ = v => String(v == null ? '' : v).split(',').map(s => s.trim()).filter(Boolean);
 function normSession(s) {
   return {
     id: String(g(s, 'sessionId', 'id', 'activityId') || ''),
@@ -628,26 +629,51 @@ function normSession(s) {
     worker: g(s, 'workerName', 'name', 'worker', 'workerId') || 'Unknown worker',
     task: g(s, 'taskType', 'task', 'activity') || 'Task not set',
     bedId: g(s, 'bedId', 'bed') || '', cohortId: g(s, 'cohortId', 'cohort') || '', crop: g(s, 'cropName', 'crop') || '',
-    start: g(s, 'startTime', 'startedAt', 'start')
+    start: g(s, 'startTime', 'startedAt', 'start'),
+    // FIX (bug 4): status/pause/reassignment fields were never read off the session
+    // at all, so the board could never show a paused session's reason or how long
+    // it has been paused, or that an open session had been handed off. g()'s tolerant
+    // matching already turns 'Pause_Time(s)' into 'pausetimes', etc, so this just
+    // needed asking for them.
+    status: String(g(s, 'status') || 'ACTIVE').toUpperCase(),
+    pauseTimes: splitListLocal_(g(s, 'pauseTimes')),
+    resumeTimes: splitListLocal_(g(s, 'resumeTimes')),
+    pauseReasons: splitListLocal_(g(s, 'pauseReasons')),
+    reassignedFrom: g(s, 'reassignedFrom') || ''
   };
 }
 function renderBoard() {
   $('#board-meta').textContent = state.sessions.length ? state.sessions.length + ' open, updated ' + fmtTime(new Date()) : 'Updated ' + fmtTime(new Date());
   const box = $('#board-list');
   if (!state.sessions.length) { box.innerHTML = empty('No open sessions', 'Nobody is signed into a bed right now. Sessions appear here as soon as a worker starts one.'); return; }
-  box.innerHTML = state.sessions.map((s, i) => `
+  box.innerHTML = state.sessions.map((s, i) => {
+    const assigned = s.status === 'ASSIGNED';   // manager assigned it, worker hasn't tapped Start yet (see ActivityEngine.gs)
+    const paused = s.status === 'PAUSED';
+    const lastPause = s.pauseTimes[s.pauseTimes.length - 1];
+    const stillPaused = paused && s.pauseTimes.length > s.resumeTimes.length;
+    const lastReason = s.pauseReasons[s.pauseReasons.length - 1];
+    const chips = [];
+    if (assigned) chips.push('<span class="chip neutral">Waiting for worker to start</span>');
+    if (stillPaused && lastPause) chips.push(`<span class="chip med">Paused${lastReason ? ': ' + esc(lastReason) : ''}, ${esc(elapsedText(lastPause))} ago</span>`);
+    if (s.reassignedFrom) chips.push(`<span class="chip neutral">Reassigned from ${esc(workerName(s.reassignedFrom))}</span>`);
+    const elapsed = assigned
+      ? '<span>Not started</span><small>assigned, waiting</small>'
+      : `<span data-since="${esc(s.start || '')}">${esc(elapsedText(s.start) || '-')}</span><small>${s.start ? (stillPaused ? 'started ' : 'since ') + esc(fmtTime(s.start)) : 'start time missing'}</small>`;
+    return `
     <article class="session">
       <div class="session-top">
         <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p></div>
-        <div class="elapsed"><span data-since="${esc(s.start || '')}">${esc(elapsedText(s.start) || '-')}</span><small>${s.start ? 'since ' + esc(fmtTime(s.start)) : 'start time missing'}</small></div>
+        <div class="elapsed">${elapsed}</div>
       </div>
+      ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
       <dl class="facts">
         <div><dt>Bed</dt><dd>${esc(s.bedId || '-')}</dd></div>
         <div><dt>Cohort</dt><dd>${esc(s.cohortId || '-')}</dd></div>
         <div><dt>Crop</dt><dd>${esc(s.crop || '-')}</dd></div>
       </dl>
       <button class="btn btn-block" data-act="reassign" data-i="${i}" type="button">Reassign</button>
-    </article>`).join('');
+    </article>`;
+  }).join('');
 }
 
 /* ----- 3. reassignment history ----- */
@@ -714,9 +740,15 @@ function renderActivityLog() {
     }
     const dur = g(a, 'durationMinutes', 'duration') !== undefined ? durationText(g(a, 'durationMinutes', 'duration')) : '';
     const range = [fmtTime(g(a, 'startTime')), fmtTime(g(a, 'endTime'))].filter(Boolean).join(' to ');
+    // FIX (bug 2): "description" is what the activity TYPE is (e.g. "Prepare the field
+    // or bed surface for planting..."), from ACTIVITY_REFERENCE.Description - now joined
+    // in server-side (see getActivityFeed() in ActivityEngine.gs). It's distinct from the
+    // session's own free-text notes, which are usually blank and shown separately below.
+    const desc = g(a, 'description');
     return `<div class="item stripe low">
       <div class="item-top"><span class="item-title">${esc(g(a, 'taskType', 'task') || 'Session')} completed</span><span class="item-time">${esc(fmtDateTime(when))}</span></div>
       <p>${esc(who)}${dur ? ', ' + esc(dur) : ''}</p>
+      ${desc ? `<p class="sub">${esc(desc)}</p>` : ''}
       <p class="sub">${['Bed ' + (g(a, 'bedId', 'bed') || '-'), g(a, 'cohortId', 'cohort'), range].filter(Boolean).map(esc).join(', ')}</p>
       ${g(a, 'notes', 'note') ? `<p>${esc(g(a, 'notes', 'note'))}</p>` : ''}</div>`;
   }).join('') + '</div>';
@@ -1008,17 +1040,18 @@ const mock = (() => {
   const d = {
     workers: [{ workerId: 'W01', name: 'Ana Prieto', role: 'Worker' }, { workerId: 'W02', name: 'Ben Okafor', role: 'Worker' }, { workerId: 'W03', name: 'Chloe Weber', role: 'Worker' }, { workerId: 'W07', name: 'Jo Lindqvist', role: 'Worker' }],
     sessions: [
-      { sessionId: 'S-1041', workerId: 'W01', workerName: 'Ana Prieto', taskType: 'Weeding', bedId: 'B-12', cohortId: 'LET-C01', cropName: 'Lettuce', startTime: min(142) },
-      { sessionId: 'S-1042', workerId: 'W02', workerName: 'Ben Okafor', taskType: 'Transplanting', bedId: 'B-07', cohortId: 'KAL-C02', cropName: 'Kale', startTime: min(37) },
-      { sessionId: 'S-1043', workerId: 'W03', workerName: 'Chloe Weber', taskType: 'Irrigation check', bedId: 'B-21', cohortId: '', cropName: '', startTime: min(9) }],
+      { sessionId: 'S-1041', workerId: 'W01', workerName: 'Ana Prieto', taskType: 'Weeding', bedId: 'B-12', cohortId: 'LET-C01', cropName: 'Lettuce', startTime: min(142), status: 'ACTIVE' },
+      { sessionId: 'S-1042', workerId: 'W02', workerName: 'Ben Okafor', taskType: 'Transplanting', bedId: 'B-07', cohortId: 'KAL-C02', cropName: 'Kale', startTime: min(37), status: 'PAUSED', pauseTimes: min(18), resumeTimes: '', pauseReasons: 'Equipment issue' },
+      { sessionId: 'S-1043', workerId: 'W03', workerName: 'Chloe Weber', taskType: 'Irrigation check', bedId: 'B-21', cohortId: '', cropName: '', startTime: min(9), status: 'ACTIVE', reassignedFrom: 'W07' },
+      { sessionId: 'S-1044', workerId: 'W07', workerName: 'Jo Lindqvist', taskType: 'Mulching', bedId: 'B-14', cohortId: 'KAL-C02', cropName: 'Kale', startTime: '', status: 'ASSIGNED' }],
     log: [
       { timestamp: min(200), fromWorkerId: 'W03', toWorkerId: 'W01', mode: 'reassign', bedId: 'B-12', cohortId: 'LET-C01', taskType: 'Weeding', managerName: 'Maya Ortiz', note: 'Ana is closer to the block' },
       { timestamp: min(1500), fromWorkerId: 'W02', toWorkerId: 'W03', mode: 'close-and-new', bedId: 'B-03', cohortId: 'ARU-C03', taskType: 'Harvest', managerName: 'Sam Reyes', note: '' }],
     activity: [
-      { type: 'session', workerId: 'W02', taskType: 'Seeding', bedId: 'B-05', cohortId: 'ARU-C04', startTime: min(420), endTime: min(370), durationMinutes: 50 },
-      { type: 'session', workerId: 'W01', taskType: 'Harvest', bedId: 'B-03', cohortId: 'ARU-C03', startTime: min(330), endTime: min(255), durationMinutes: 75, notes: 'Two crates, cold chain ok' },
+      { type: 'session', workerId: 'W02', taskType: 'Seeding', bedId: 'B-05', cohortId: 'ARU-C04', startTime: min(420), endTime: min(370), durationMinutes: 50, description: 'Sow seed directly into a prepared bed at spec depth and spacing.' },
+      { type: 'session', workerId: 'W01', taskType: 'Harvest', bedId: 'B-03', cohortId: 'ARU-C03', startTime: min(330), endTime: min(255), durationMinutes: 75, notes: 'Two crates, cold chain ok', description: 'Remove marketable product from the crop and move it into cold chain.' },
       { type: 'cohort-state', workerId: 'W01', cohortId: 'ARU-C03', bedId: 'B-03', fromState: 'HARVEST_READY', toState: 'HARVESTING', timestamp: min(335) },
-      { type: 'session', workerId: 'W03', taskType: 'Irrigation check', bedId: 'B-20', startTime: min(600), endTime: min(585), durationMinutes: 15 }],
+      { type: 'session', workerId: 'W03', taskType: 'Irrigation check', bedId: 'B-20', startTime: min(600), endTime: min(585), durationMinutes: 15, description: 'Walk the irrigation zone and confirm emitters are running and undamaged.' }],
     scout: [
       { findingId: 'SF-000123', bedId: 'B-12', cohortId: 'LET-C01', domain: 'PestPressure', symptom: 'Aphids on outer leaves', severity: 'HIGH', requiresAction: true, notes: 'Clusters on about a third of plants', photoUrl: 'https://example.com/photo/aphids.jpg', worker: 'Ana Prieto', timestamp: min(95), exceptionId: 'EXC-0012', resolvedStatus: 'OPEN' },
       { findingId: 'SF-000124', bedId: 'B-07', cohortId: 'KAL-C02', domain: 'PlantCondition', symptom: 'Wilting after transplant', severity: 'CRITICAL', requiresAction: true, notes: '', photoUrl: '', worker: 'Ben Okafor', timestamp: min(20), exceptionId: 'EXC-0013', resolvedStatus: 'OPEN' },
@@ -1072,7 +1105,11 @@ const mock = (() => {
         const s = d.sessions.find(x => x.sessionId === p.sessionId); if (!s) return bad('That session is no longer open.', 'NOT_FOUND');
         const to = d.workers.find(w => w.workerId === p.toWorkerId);
         d.log.push({ timestamp: new Date().toISOString(), fromWorkerId: s.workerId, toWorkerId: p.toWorkerId, mode: action === 'reassign-session' ? 'reassign' : 'close-and-new', bedId: s.bedId, cohortId: s.cohortId, taskType: s.taskType, managerName: me.name, note: p.note || '' });
-        s.workerId = p.toWorkerId; s.workerName = to ? to.name : p.toWorkerId; if (action === 'close-and-new-session') s.startTime = new Date().toISOString();
+        const fromId = s.workerId;
+        s.workerId = p.toWorkerId; s.workerName = to ? to.name : p.toWorkerId; s.reassignedFrom = fromId;
+        // Mirrors the real backend's ASSIGNED status (ActivityEngine.gs): "Close & new" hands the
+        // worker a fresh task they must start themselves, it does not start the clock for them.
+        if (action === 'close-and-new-session') { s.startTime = ''; s.status = 'ASSIGNED'; }
         return ok({ done: true });
       }
       case 'verify-harvest-ready': d.candidates = d.candidates.filter(c => c.cohortId !== p.cohortId); return ok({ done: true });
