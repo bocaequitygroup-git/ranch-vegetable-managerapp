@@ -639,7 +639,12 @@ function normSession(s) {
     pauseTimes: splitListLocal_(g(s, 'pauseTimes')),
     resumeTimes: splitListLocal_(g(s, 'resumeTimes')),
     pauseReasons: splitListLocal_(g(s, 'pauseReasons')),
-    reassignedFrom: g(s, 'reassignedFrom') || ''
+    reassignedFrom: g(s, 'reassignedFrom') || '',
+    // FIX (bug 5): the board only ever showed the bare task-name label (e.g. "Mulching"),
+    // same root cause as bug 2 in the Activity History tab - ACTIVITY_REFERENCE.Description
+    // was joined server-side for get-activity-history but not for get-manager-board. Now
+    // fixed server-side too (withActivityDescription_() in Code_main.gs); this just reads it.
+    desc: g(s, 'description') || ''
   };
 }
 function renderBoard() {
@@ -662,7 +667,7 @@ function renderBoard() {
     return `
     <article class="session">
       <div class="session-top">
-        <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p></div>
+        <div><h3>${esc(s.worker)}</h3><p class="sub">${esc(s.task)}</p>${s.desc ? `<p class="sub">${esc(s.desc)}</p>` : ''}</div>
         <div class="elapsed">${elapsed}</div>
       </div>
       ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
